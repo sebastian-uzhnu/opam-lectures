@@ -84,6 +84,11 @@ const config: Config = {
           label: 'Лекції',
         },
         {
+          href: 'https://t.me/sebii_sw',
+          label: 'Telegram',
+          position: 'right',
+        },
+        {
           href: 'https://instagram.com/sebii_sw',
           label: 'Instagram',
           position: 'right',
