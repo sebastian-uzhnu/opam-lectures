@@ -1,0 +1,10 @@
+{
+    "label": "Тема 15. Відлагодження програми і управління помилками",
+    "position": 13,
+    "link": {
+        "type": "generated-index",
+        "slug": "debugging-and-error-handling",
+        "title": "Відлагодження програми і управління помилками",
+        "description": "Суть процесу відлагодження програми. Засоби відлагодження у Visual Studio 2022. Брейкпойнти, покрокове виконання, вікна Locals та Watch, Call Stack."
+    }
+}
