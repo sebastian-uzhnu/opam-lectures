@@ -1,0 +1,10 @@
+{
+    "label": "Тема 18. Елементи керування та контейнери",
+    "position": 18,
+    "link": {
+        "type": "generated-index",
+        "slug": "windows-forms-controls-containers",
+        "title": "Елементи керування та контейнери",
+        "description": "Основні елементи управління: Button, TextBox, Label, RichTextBox, CheckBox, RadioButton. Контейнери GroupBox, Panel. Використання елементів «дерево» та «таблиця». Обробка подій миші та клавіатури. Підключення обробників подій до елементів керування для інтеграції бізнес-логіки."
+    }
+}
