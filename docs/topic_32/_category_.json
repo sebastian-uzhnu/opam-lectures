@@ -1,0 +1,10 @@
+{
+    "label": "Тема 32. Основи багатопотоковості у .NET",
+    "position": 32,
+    "link": {
+        "type": "generated-index",
+        "slug": "dotnet-threading-basics",
+        "title": "Основи багатопотоковості у .NET",
+        "description": "Процес та потік — ключові відмінності. Клас Thread: створення, керування, фонові потоки. ThreadPool та пул потоків. Клас Task і Task<T>. async/await та асинхронне програмування. CancellationToken, Progress<T>. Практичний WPF-додаток-завантажувач файлів."
+    }
+}

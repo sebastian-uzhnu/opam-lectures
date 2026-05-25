@@ -1,0 +1,10 @@
+{
+    "label": "Тема 24. Entity Framework Core та ORM",
+    "position": 24,
+    "link": {
+        "type": "generated-index",
+        "slug": "entity-framework-core-orm",
+        "title": "Entity Framework Core та ORM",
+        "description": "Концепція ORM. Code First підхід: моделі, DbContext, атрибути. Міграції — створення та застосування. CRUD через LINQ. Зв'язки між сутностями (один-до-багатьох, багато-до-багатьох). Include та lazy/eager loading. Практичний WPF-додаток."
+    }
+}

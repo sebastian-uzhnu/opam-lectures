@@ -1,0 +1,10 @@
+{
+    "label": "Тема 20. Анімації та математична графіка у WPF",
+    "position": 20,
+    "link": {
+        "type": "generated-index",
+        "slug": "wpf-animations-math-graphics",
+        "title": "Анімації та математична графіка у WPF",
+        "description": "Введення у WPF і систему анімацій. Storyboard, ColorAnimation, DoubleAnimation, PointAnimation. Малювання математичних кривих: лінія, серце, спірограф. DispatcherTimer і покрокові анімації. Практичні приклади з повним кодом."
+    }
+}
