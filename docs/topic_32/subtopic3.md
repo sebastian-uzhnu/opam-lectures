@@ -649,7 +649,7 @@ foreach (string url in urls)
     await DownloadAsync(url, token); // Кожне наступне чекає попереднє
 ```
 
-### Progress<T> vs Dispatcher.Invoke
+### Progress\<T\> vs Dispatcher.Invoke
 
 ```csharp
 // Старий стиль (явний Dispatcher):
