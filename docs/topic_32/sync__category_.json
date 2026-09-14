@@ -1,0 +1,10 @@
+{
+    "label": "Тема 33. Синхронізація потоків",
+    "position": 33,
+    "link": {
+        "type": "generated-index",
+        "slug": "dotnet-thread-synchronization",
+        "title": "Синхронізація потоків",
+        "description": "Стан гонки (race condition) та способи захисту від нього. Ключове слово lock і клас Monitor. Між-процесна синхронізація через Mutex. Обмеження паралелізму через Semaphore та SemaphoreSlim. Ефективна робота з кешем через ReaderWriterLockSlim. Атомарні операції Interlocked. Потокобезпечні колекції: ConcurrentDictionary, ConcurrentQueue, BlockingCollection."
+    }
+}

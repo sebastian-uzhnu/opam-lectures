@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Visual Studio IDE
 
 Інтегроване середовище розробки (Integrated Development Environment, IDE) — це програмний комплекс, що забезпечує

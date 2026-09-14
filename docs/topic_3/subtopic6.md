@@ -1,5 +1,6 @@
 ---
 sidebar_label: Операції в C#
+sidebar_position: 7
 ---
 
 # Операції в C#

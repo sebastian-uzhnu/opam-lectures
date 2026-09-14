@@ -2,196 +2,48 @@
 sidebar_position: 4
 ---
 
-# Практичний приклад: потокобезпечний лічильник та черга завдань
+# Практичний WPF-додаток: паралельна обробка зображень
 
 ## Огляд проекту
 
-У цьому розділі ми побудуємо WPF-застосунок, який наочно демонструє:
+Побудуємо повноцінний WPF-додаток, який:
+- Дозволяє вибрати папку із зображеннями
+- Обробляє їх **паралельно** (`Parallel.ForEach` з `CancellationToken`)
+- Звітує про прогрес через **`Progress<T>`** (потокобезпечно)
+- Порівнює час послідовної та паралельної обробки через **`Stopwatch`**
+- Дозволяє скасувати обробку у будь-який момент
 
-1. **Race condition** — кілька потоків одночасно інкрементують лічильник без захисту
-2. **lock** — виправлена версія з `lock`
-3. **Interlocked** — оптимальна версія з `Interlocked.Increment`
-4. **BlockingCollection** — потокобезпечна черга завдань у реальному часі
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Синхронізація потоків                          [─][□][✕]   │
-├─────────────────────────────────────────────────────────────┤
-│  Кількість потоків: [5]   Ітерацій: [100 000]               │
-│                                                             │
-│  ┌─────────────────────┐  ┌────────────────────────────┐   │
-│  │  БЕЗ синхронізації  │  │  З LOCK                    │   │
-│  │  Очікується: 500000 │  │  Очікується: 500000        │   │
-│  │  Результат:  347821 │  │  Результат:  500000 ✓      │   │
-│  │  [Запустити]        │  │  [Запустити]               │   │
-│  └─────────────────────┘  └────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────┐  ┌────────────────────────────┐   │
-│  │  З INTERLOCKED      │  │  ЧЕРГА ЗАВДАНЬ             │   │
-│  │  Очікується: 500000 │  │  ┌──────────────────────┐  │   │
-│  │  Результат:  500000 │  │  │ [✓] Завдання 1       │  │   │
-│  │  [Запустити]        │  │  │ [✓] Завдання 2       │  │   │
-│  └─────────────────────┘  │  │ [⟳] Завдання 3       │  │   │
-│                            │  └──────────────────────┘  │   │
-│                            │  [Додати завдання]          │   │
-│                            └────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Клас ThreadSafeCounter
-
-Спочатку визначимо три варіанти лічильника:
-
-```csharp
-using System.Threading;
-
-namespace ThreadSyncDemo;
-
-// Версія 1: НЕБЕЗПЕЧНА — для демонстрації race condition
-public class UnsafeCounter
-{
-    private int _value = 0;
-
-    public void Increment() => _value++; // не атомарна!
-    public int Value => _value;
-    public void Reset() => _value = 0;
-}
-
-// Версія 2: БЕЗПЕЧНА через lock
-public class LockCounter
-{
-    private int _value = 0;
-    private readonly object _lock = new();
-
-    public void Increment()
-    {
-        lock (_lock) { _value++; }
-    }
-    public int Value
-    {
-        get { lock (_lock) { return _value; } }
-    }
-    public void Reset()
-    {
-        lock (_lock) { _value = 0; }
-    }
-}
-
-// Версія 3: БЕЗПЕЧНА через Interlocked (найшвидша)
-public class InterlockedCounter
-{
-    private int _value = 0;
-
-    public void Increment() => Interlocked.Increment(ref _value);
-    public int Value => Interlocked.CompareExchange(ref _value, 0, 0);
-    public void Reset() => Interlocked.Exchange(ref _value, 0);
-}
-```
-
----
-
-## Клас TaskQueue (Producer-Consumer)
-
-```csharp
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace ThreadSyncDemo;
-
-public record WorkItem(int Id, string Name, DateTime CreatedAt);
-
-public class TaskQueue : IDisposable
-{
-    private readonly BlockingCollection<WorkItem> _queue;
-    private readonly Thread _workerThread;
-    private readonly Action<WorkItem> _onProcessed;
-    private readonly Action<WorkItem> _onStarted;
-
-    public TaskQueue(Action<WorkItem> onStarted, Action<WorkItem> onProcessed, int capacity = 20)
-    {
-        _queue        = new BlockingCollection<WorkItem>(capacity);
-        _onStarted    = onStarted;
-        _onProcessed  = onProcessed;
-
-        _workerThread = new Thread(ProcessLoop)
-        {
-            IsBackground = true,
-            Name = "TaskQueue-Worker"
-        };
-        _workerThread.Start();
-    }
-
-    public bool TryEnqueue(WorkItem item) => _queue.TryAdd(item);
-
-    private void ProcessLoop()
-    {
-        foreach (WorkItem item in _queue.GetConsumingEnumerable())
-        {
-            _onStarted(item);
-            Thread.Sleep(500); // імітуємо обробку
-            _onProcessed(item);
-        }
-    }
-
-    public void Dispose()
-    {
-        _queue.CompleteAdding();
-        _workerThread.Join(TimeSpan.FromSeconds(2));
-        _queue.Dispose();
-    }
-}
-```
-
----
-
-## XAML: інтерфейс додатку
-
-**`MainWindow.xaml`:**
+## XAML: темна тема Catppuccin Mocha
 
 ```xml
-<Window x:Class="ThreadSyncDemo.MainWindow"
+<Window x:Class="ParallelImageProcessor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Синхронізація потоків"
-        Height="620" Width="820"
-        Background="#1e1e2e"
-        Foreground="#cdd6f4"
-        FontFamily="Segoe UI"
-        ResizeMode="NoResize">
+        Title="Паралельна обробка зображень"
+        Height="650" Width="900"
+        Background="#1e1e2e">
 
     <Window.Resources>
-        <!-- Стиль панелей -->
-        <Style x:Key="PanelStyle" TargetType="Border">
-            <Setter Property="Background"       Value="#313244"/>
-            <Setter Property="CornerRadius"     Value="8"/>
-            <Setter Property="Padding"          Value="16"/>
-            <Setter Property="Margin"           Value="6"/>
-        </Style>
-
-        <!-- Стиль кнопок -->
-        <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Background"   Value="#89b4fa"/>
-            <Setter Property="Foreground"   Value="#1e1e2e"/>
-            <Setter Property="FontWeight"   Value="SemiBold"/>
-            <Setter Property="Padding"      Value="12,6"/>
+        <!-- Стиль кнопки (Catppuccin Mocha: Mauve accent) -->
+        <Style x:Key="MochaButton" TargetType="Button">
+            <Setter Property="Background" Value="#cba4f7"/>
+            <Setter Property="Foreground" Value="#1e1e2e"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="14,7"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
-                                CornerRadius="4"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#b4d0ff"/>
+                                <Setter Property="Background" Value="#b4befe"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Background" Value="#45475a"/>
@@ -203,197 +55,148 @@ public class TaskQueue : IDisposable
             </Setter>
         </Style>
 
-        <!-- Стиль полів вводу -->
-        <Style TargetType="TextBox">
-            <Setter Property="Background"       Value="#45475a"/>
-            <Setter Property="Foreground"       Value="#cdd6f4"/>
-            <Setter Property="BorderBrush"      Value="#585b70"/>
-            <Setter Property="BorderThickness"  Value="1"/>
-            <Setter Property="Padding"          Value="6,4"/>
-            <Setter Property="CaretBrush"       Value="#cdd6f4"/>
-        </Style>
-
-        <!-- Стиль елементів списку -->
-        <Style TargetType="ListBoxItem">
-            <Setter Property="Background"   Value="Transparent"/>
-            <Setter Property="Foreground"   Value="#cdd6f4"/>
-            <Setter Property="Padding"      Value="6,3"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ListBoxItem">
-                        <Border Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="#45475a"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <!-- Стиль кнопки скасування (Red) -->
+        <Style x:Key="CancelButton" TargetType="Button" BasedOn="{StaticResource MochaButton}">
+            <Setter Property="Background" Value="#f38ba8"/>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="12">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>  <!-- Заголовок -->
+            <RowDefinition Height="Auto"/>  <!-- Вибір папки -->
+            <RowDefinition Height="Auto"/>  <!-- Кнопки дій -->
+            <RowDefinition Height="Auto"/>  <!-- Прогрес-бар -->
+            <RowDefinition Height="Auto"/>  <!-- Статистика -->
+            <RowDefinition Height="*"/>     <!-- Лог -->
         </Grid.RowDefinitions>
 
-        <!-- Заголовок і налаштування -->
-        <Border Grid.Row="0" Style="{StaticResource PanelStyle}" Margin="6,6,6,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="Кількість потоків:"
-                           VerticalAlignment="Center" Margin="0,0,8,0"
-                           Foreground="#a6adc8"/>
-                <TextBox x:Name="ThreadCountBox" Text="5" Width="50"
-                         HorizontalContentAlignment="Center"/>
-                <TextBlock Text="Ітерацій на потік:"
-                           VerticalAlignment="Center" Margin="20,0,8,0"
-                           Foreground="#a6adc8"/>
-                <TextBox x:Name="IterationsBox" Text="100000" Width="90"
-                         HorizontalContentAlignment="Center"/>
-            </StackPanel>
-        </Border>
+        <!-- Заголовок -->
+        <TextBlock Grid.Row="0"
+                   Text="Паралельна обробка зображень"
+                   FontSize="22" FontWeight="Bold"
+                   Foreground="#cdd6f4"
+                   Margin="0,0,0,16"/>
 
-        <!-- Основний вміст -->
-        <Grid Grid.Row="1">
+        <!-- Вибір папки -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Панель 1: без синхронізації -->
-            <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource PanelStyle}">
-                <StackPanel>
-                    <TextBlock Text="БЕЗ СИНХРОНІЗАЦІЇ"
-                               FontSize="13" FontWeight="Bold"
-                               Foreground="#f38ba8" Margin="0,0,0,10"/>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Очікується: "/>
-                        <Run x:Name="UnsafeExpected" Text="500 000" Foreground="#cdd6f4"/>
-                    </TextBlock>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Отримано:   "/>
-                        <Run x:Name="UnsafeResult" Text="—" Foreground="#f38ba8"
-                             FontWeight="Bold" FontSize="13"/>
-                    </TextBlock>
-                    <TextBlock x:Name="UnsafeDiff" Foreground="#fab387"
-                               FontSize="11" Margin="0,0,0,10"/>
-                    <ProgressBar x:Name="UnsafeProgress" Height="6"
-                                 Background="#45475a" Foreground="#f38ba8"
-                                 Minimum="0" Margin="0,0,0,10"/>
-                    <Button x:Name="UnsafeBtn" Content="Запустити"
-                            Style="{StaticResource ActionButton}"
-                            Click="OnUnsafeClick"/>
-                </StackPanel>
+            <Border Grid.Column="0"
+                    Background="#313244" CornerRadius="6"
+                    Padding="10,6" Margin="0,0,8,0">
+                <TextBlock x:Name="FolderPathText"
+                           Text="Папку не вибрано..."
+                           Foreground="#a6adc8"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
             </Border>
-
-            <!-- Панель 2: з lock -->
-            <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource PanelStyle}">
-                <StackPanel>
-                    <TextBlock Text="З LOCK"
-                               FontSize="13" FontWeight="Bold"
-                               Foreground="#a6e3a1" Margin="0,0,0,10"/>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Очікується: "/>
-                        <Run x:Name="LockExpected" Text="500 000" Foreground="#cdd6f4"/>
-                    </TextBlock>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Отримано:   "/>
-                        <Run x:Name="LockResult" Text="—" Foreground="#a6e3a1"
-                             FontWeight="Bold" FontSize="13"/>
-                    </TextBlock>
-                    <TextBlock x:Name="LockTime" Foreground="#a6adc8"
-                               FontSize="11" Margin="0,0,0,10"/>
-                    <ProgressBar x:Name="LockProgress" Height="6"
-                                 Background="#45475a" Foreground="#a6e3a1"
-                                 Minimum="0" Margin="0,0,0,10"/>
-                    <Button x:Name="LockBtn" Content="Запустити"
-                            Style="{StaticResource ActionButton}"
-                            Click="OnLockClick"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Панель 3: з Interlocked -->
-            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource PanelStyle}">
-                <StackPanel>
-                    <TextBlock Text="З INTERLOCKED"
-                               FontSize="13" FontWeight="Bold"
-                               Foreground="#89dceb" Margin="0,0,0,10"/>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Очікується: "/>
-                        <Run x:Name="ILExpected" Text="500 000" Foreground="#cdd6f4"/>
-                    </TextBlock>
-                    <TextBlock Foreground="#a6adc8" FontSize="11" Margin="0,0,0,6">
-                        <Run Text="Отримано:   "/>
-                        <Run x:Name="ILResult" Text="—" Foreground="#89dceb"
-                             FontWeight="Bold" FontSize="13"/>
-                    </TextBlock>
-                    <TextBlock x:Name="ILTime" Foreground="#a6adc8"
-                               FontSize="11" Margin="0,0,0,10"/>
-                    <ProgressBar x:Name="ILProgress" Height="6"
-                                 Background="#45475a" Foreground="#89dceb"
-                                 Minimum="0" Margin="0,0,0,10"/>
-                    <Button x:Name="ILBtn" Content="Запустити"
-                            Style="{StaticResource ActionButton}"
-                            Click="OnInterlockedClick"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Панель 4: черга завдань -->
-            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource PanelStyle}">
-                <StackPanel>
-                    <TextBlock Text="ЧЕРГА ЗАВДАНЬ (BlockingCollection)"
-                               FontSize="13" FontWeight="Bold"
-                               Foreground="#cba6f7" Margin="0,0,0,10"/>
-                    <ListBox x:Name="TaskLog"
-                             Height="110"
-                             Background="#1e1e2e"
-                             BorderBrush="#585b70"
-                             BorderThickness="1"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             Margin="0,0,0,8"/>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Додати завдання"
-                                Style="{StaticResource ActionButton}"
-                                Click="OnAddTask"
-                                Margin="0,0,8,0"/>
-                        <Button Content="Очистити"
-                                Style="{StaticResource ActionButton}"
-                                Background="#45475a"
-                                Foreground="#cdd6f4"
-                                Click="OnClearLog"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <Button Grid.Column="1"
+                    Content="Вибрати папку"
+                    Style="{StaticResource MochaButton}"
+                    Click="OnSelectFolder_Click"/>
         </Grid>
 
-        <!-- Рядок порівняння -->
-        <Border Grid.Row="2" Style="{StaticResource PanelStyle}" Margin="6,0,6,6">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24">
-                <TextBlock Foreground="#a6adc8" FontSize="11" VerticalAlignment="Center"
-                           Text="Час виконання:"/>
-                <TextBlock x:Name="LockTimeShort"  Foreground="#a6e3a1" FontSize="11"
-                           VerticalAlignment="Center" Text="lock: —"/>
-                <TextBlock x:Name="ILTimeShort"    Foreground="#89dceb" FontSize="11"
-                           VerticalAlignment="Center" Text="Interlocked: —"/>
-                <TextBlock x:Name="SpeedupLabel"   Foreground="#f9e2af" FontSize="11"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
+        <!-- Кнопки дій -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    Margin="0,0,0,16">
+            <Button x:Name="BtnSequential"
+                    Content="Послідовна обробка"
+                    Style="{StaticResource MochaButton}"
+                    Margin="0,0,8,0"
+                    Click="OnSequential_Click"/>
+            <Button x:Name="BtnParallel"
+                    Content="Паралельна обробка"
+                    Style="{StaticResource MochaButton}"
+                    Margin="0,0,8,0"
+                    Click="OnParallel_Click"/>
+            <Button x:Name="BtnCancel"
+                    Content="Скасувати"
+                    Style="{StaticResource CancelButton}"
+                    IsEnabled="False"
+                    Click="OnCancel_Click"/>
+        </StackPanel>
+
+        <!-- Прогрес-бар -->
+        <Grid Grid.Row="3" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ProgressBar x:Name="ProgressBar"
+                         Grid.Column="0"
+                         Height="18"
+                         Background="#313244"
+                         Foreground="#a6e3a1"
+                         BorderThickness="0"
+                         Margin="0,0,12,0"/>
+            <TextBlock x:Name="ProgressText"
+                       Grid.Column="1"
+                       Text="0 / 0"
+                       Foreground="#cdd6f4"
+                       VerticalAlignment="Center"
+                       Width="60"
+                       TextAlignment="Right"/>
+        </Grid>
+
+        <!-- Статистика часу -->
+        <Border Grid.Row="4"
+                Background="#313244" CornerRadius="8"
+                Padding="14,10" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Послідовно"
+                               Foreground="#6c7086" FontSize="11"/>
+                    <TextBlock x:Name="SeqTimeText"
+                               Text="— мс"
+                               Foreground="#f38ba8"
+                               FontSize="18" FontWeight="Bold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                    <TextBlock Text="Паралельно"
+                               Foreground="#6c7086" FontSize="11"/>
+                    <TextBlock x:Name="ParTimeText"
+                               Text="— мс"
+                               Foreground="#a6e3a1"
+                               FontSize="18" FontWeight="Bold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                    <TextBlock Text="Прискорення"
+                               Foreground="#6c7086" FontSize="11"/>
+                    <TextBlock x:Name="SpeedupText"
+                               Text="—"
+                               Foreground="#cba4f7"
+                               FontSize="18" FontWeight="Bold"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Лог повідомлень -->
+        <Border Grid.Row="5"
+                Background="#181825" CornerRadius="8"
+                Padding="10">
+            <ScrollViewer x:Name="LogScroller"
+                          VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="LogText"
+                           Foreground="#cdd6f4"
+                           FontFamily="Cascadia Code, Consolas, monospace"
+                           FontSize="12"
+                           TextWrapping="Wrap"/>
+            </ScrollViewer>
         </Border>
     </Grid>
 </Window>
 ```
-
----
 
 ## Code-behind: MainWindow.xaml.cs
 
@@ -401,303 +204,401 @@ public class TaskQueue : IDisposable
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
+using Microsoft.Win32;
 
-namespace ThreadSyncDemo;
-
-public partial class MainWindow : Window
+namespace ParallelImageProcessor
 {
-    // Лічильники трьох типів
-    private readonly UnsafeCounter      _unsafeCounter      = new();
-    private readonly LockCounter        _lockCounter        = new();
-    private readonly InterlockedCounter _interlockedCounter = new();
-
-    // Черга завдань
-    private TaskQueue? _taskQueue;
-    private int        _taskIdCounter = 0;
-
-    // Збережені часи для порівняння
-    private long _lockMs        = 0;
-    private long _interlockedMs = 0;
-
-    public MainWindow()
+    public partial class MainWindow : Window
     {
-        InitializeComponent();
-        InitTaskQueue();
-    }
+        // ── Стан ──────────────────────────────────────────────────────
+        private string[]? _imageFiles;
+        private CancellationTokenSource? _cts;
+        private long _sequentialMs = -1;
+        private long _parallelMs   = -1;
 
-    // ─── Ініціалізація черги ────────────────────────────────────────────────
-
-    private void InitTaskQueue()
-    {
-        _taskQueue = new TaskQueue(
-            onStarted: item => Dispatcher.BeginInvoke(() =>
-            {
-                UpdateTaskLog(item.Id, $"⟳ Завдання #{item.Id} — виконується...", "#f9e2af");
-            }),
-            onProcessed: item => Dispatcher.BeginInvoke(() =>
-            {
-                UpdateTaskLog(item.Id, $"✓ Завдання #{item.Id} — виконано", "#a6e3a1");
-            })
-        );
-    }
-
-    // ─── Допоміжні методи ──────────────────────────────────────────────────
-
-    private (int threads, int iterations, long expected) ParseInputs()
-    {
-        int threads    = int.TryParse(ThreadCountBox.Text,    out int t) ? Math.Clamp(t, 1, 20)       : 5;
-        int iterations = int.TryParse(IterationsBox.Text,     out int i) ? Math.Clamp(i, 1000, 500000): 100_000;
-        return (threads, iterations, (long)threads * iterations);
-    }
-
-    private void SetBusy(Button btn, bool busy)
-    {
-        UnsafeBtn.IsEnabled = !busy;
-        LockBtn.IsEnabled   = !busy;
-        ILBtn.IsEnabled     = !busy;
-    }
-
-    private void UpdateTaskLog(int taskId, string text, string hexColor)
-    {
-        // Шукаємо існуючий елемент або додаємо новий
-        for (int i = 0; i < TaskLog.Items.Count; i++)
+        // ── Конструктор ───────────────────────────────────────────────
+        public MainWindow()
         {
-            if (TaskLog.Items[i] is TextBlock tb &&
-                tb.Tag is int id && id == taskId)
+            InitializeComponent();
+        }
+
+        // ── Вибір папки ───────────────────────────────────────────────
+        private void OnSelectFolder_Click(object sender, RoutedEventArgs e)
+        {
+            // OpenFolderDialog доступний у .NET 8+ WPF
+            var dialog = new OpenFolderDialog
             {
-                tb.Text = text;
-                tb.Foreground = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor));
-                return;
+                Title = "Виберіть папку із зображеннями"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var folder = dialog.FolderName;
+                _imageFiles = Directory
+                    .GetFiles(folder, "*.*")
+                    .Where(f => IsImageFile(f))
+                    .ToArray();
+
+                FolderPathText.Text = folder;
+                Log($"Знайдено {_imageFiles.Length} зображень у: {folder}");
+
+                ProgressBar.Maximum = _imageFiles.Length;
+                ProgressBar.Value   = 0;
+                ProgressText.Text   = $"0 / {_imageFiles.Length}";
             }
         }
-        // Не знайшли — додаємо новий
-        var newTb = new TextBlock
-        {
-            Text       = text,
-            Tag        = taskId,
-            FontFamily = new System.Windows.Media.FontFamily("Cascadia Code, Consolas"),
-            FontSize   = 11,
-            Foreground = new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor))
-        };
-        TaskLog.Items.Add(newTb);
-        TaskLog.ScrollIntoView(newTb);
-    }
 
-    private void UpdateSpeedComparison()
-    {
-        if (_lockMs == 0 || _interlockedMs == 0) return;
-        LockTimeShort.Text  = $"lock: {_lockMs} мс";
-        ILTimeShort.Text    = $"Interlocked: {_interlockedMs} мс";
-
-        if (_interlockedMs > 0)
+        // ── Послідовна обробка ────────────────────────────────────────
+        private async void OnSequential_Click(object sender, RoutedEventArgs e)
         {
-            double ratio = (double)_lockMs / _interlockedMs;
-            SpeedupLabel.Text = $"Interlocked швидший у {ratio:F1}x";
+            if (!ValidateInput()) return;
+
+            SetUiBusy(true);
+            ClearLog();
+            Log("▶ Починаємо ПОСЛІДОВНУ обробку...");
+
+            int processed = 0;
+            int total = _imageFiles!.Length;
+            ResetProgress(total);
+
+            // Progress<T> — потокобезпечний: колбек виконується у UI-потоці
+            var progress = new Progress<(int Current, string FileName)>(report =>
+            {
+                ProgressBar.Value = report.Current;
+                ProgressText.Text = $"{report.Current} / {total}";
+                Log($"  ✓ {report.FileName}");
+                LogScroller.ScrollToEnd();
+            });
+
+            var sw = Stopwatch.StartNew();
+
+            await Task.Run(() =>
+            {
+                foreach (var filePath in _imageFiles!)
+                {
+                    ProcessImageFile(filePath);
+                    processed++;
+                    ((IProgress<(int, string)>)progress).Report(
+                        (processed, Path.GetFileName(filePath)));
+                }
+            });
+
+            sw.Stop();
+            _sequentialMs = sw.ElapsedMilliseconds;
+
+            SeqTimeText.Text = $"{_sequentialMs} мс";
+            Log($"✅ Послідовно завершено за {_sequentialMs} мс");
+            UpdateSpeedup();
+            SetUiBusy(false);
         }
-    }
 
-    // ─── Обробники кнопок ──────────────────────────────────────────────────
-
-    private async void OnUnsafeClick(object sender, RoutedEventArgs e)
-    {
-        var (threads, iterations, expected) = ParseInputs();
-        UnsafeExpected.Text = $"{expected:N0}";
-        UnsafeResult.Text   = "Виконується...";
-        UnsafeDiff.Text     = "";
-        SetBusy(UnsafeBtn, true);
-
-        _unsafeCounter.Reset();
-        UnsafeProgress.Maximum = expected;
-        UnsafeProgress.Value   = 0;
-
-        // Запускаємо без синхронізації — спостерігаємо race condition
-        await Task.Run(() =>
+        // ── Паралельна обробка ────────────────────────────────────────
+        private async void OnParallel_Click(object sender, RoutedEventArgs e)
         {
-            var tasks = new Task[threads];
-            for (int i = 0; i < threads; i++)
+            if (!ValidateInput()) return;
+
+            _cts = new CancellationTokenSource();
+            SetUiBusy(true);
+            BtnCancel.IsEnabled = true;
+            ClearLog();
+            Log("▶ Починаємо ПАРАЛЕЛЬНУ обробку...");
+
+            int processed = 0;
+            int total = _imageFiles!.Length;
+            ResetProgress(total);
+
+            // Progress<T>: звіт про прогрес з будь-якого потоку
+            var progress = new Progress<(int Current, string FileName)>(report =>
             {
-                tasks[i] = Task.Run(() =>
+                ProgressBar.Value = report.Current;
+                ProgressText.Text = $"{report.Current} / {total}";
+                Log($"  ✓ [{Thread.CurrentThread.ManagedThreadId:D2}] {report.FileName}");
+                LogScroller.ScrollToEnd();
+            });
+
+            var options = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                CancellationToken      = _cts.Token
+            };
+
+            var sw = Stopwatch.StartNew();
+
+            try
+            {
+                await Task.Run(() =>
                 {
-                    for (int j = 0; j < iterations; j++)
-                        _unsafeCounter.Increment();
-                });
+                    Parallel.ForEach(_imageFiles!, options, filePath =>
+                    {
+                        options.CancellationToken.ThrowIfCancellationRequested();
+
+                        ProcessImageFile(filePath);
+
+                        // Interlocked.Increment — атомарне збільшення лічильника
+                        int current = Interlocked.Increment(ref processed);
+
+                        ((IProgress<(int, string)>)progress).Report(
+                            (current, Path.GetFileName(filePath)));
+                    });
+                }, _cts.Token);
+
+                sw.Stop();
+                _parallelMs = sw.ElapsedMilliseconds;
+
+                ParTimeText.Text = $"{_parallelMs} мс";
+                Log($"✅ Паралельно завершено за {_parallelMs} мс " +
+                    $"(ядер: {Environment.ProcessorCount})");
+                UpdateSpeedup();
             }
-            Task.WaitAll(tasks);
-        });
+            catch (OperationCanceledException)
+            {
+                sw.Stop();
+                Log($"⚠ Обробку скасовано на {processed} / {total} файлів " +
+                    $"за {sw.ElapsedMilliseconds} мс");
+            }
+            finally
+            {
+                _cts.Dispose();
+                _cts = null;
+                BtnCancel.IsEnabled = false;
+                SetUiBusy(false);
+            }
+        }
 
-        int result = _unsafeCounter.Value;
-        long diff  = expected - result;
-
-        UnsafeResult.Text = $"{result:N0}";
-        UnsafeProgress.Value = result;
-
-        if (diff == 0)
-            UnsafeDiff.Text = "Пощастило цього разу — запустіть ще!";
-        else
-            UnsafeDiff.Text = $"Втрачено оновлень: {diff:N0} ({(double)diff/expected*100:F1}%)";
-
-        SetBusy(UnsafeBtn, false);
-    }
-
-    private async void OnLockClick(object sender, RoutedEventArgs e)
-    {
-        var (threads, iterations, expected) = ParseInputs();
-        LockExpected.Text = $"{expected:N0}";
-        LockResult.Text   = "Виконується...";
-        LockTime.Text     = "";
-        SetBusy(LockBtn, true);
-
-        _lockCounter.Reset();
-        LockProgress.Maximum = expected;
-        LockProgress.Value   = 0;
-
-        var sw = Stopwatch.StartNew();
-        await Task.Run(() =>
+        // ── Скасування ────────────────────────────────────────────────
+        private void OnCancel_Click(object sender, RoutedEventArgs e)
         {
-            var tasks = new Task[threads];
-            for (int i = 0; i < threads; i++)
-            {
-                tasks[i] = Task.Run(() =>
-                {
-                    for (int j = 0; j < iterations; j++)
-                        _lockCounter.Increment();
-                });
-            }
-            Task.WaitAll(tasks);
-        });
-        sw.Stop();
-        _lockMs = sw.ElapsedMilliseconds;
+            _cts?.Cancel();
+            Log("🛑 Надіслано сигнал скасування...");
+        }
 
-        long result = _lockCounter.Value;
-        LockResult.Text    = $"{result:N0}";
-        LockProgress.Value = result;
-        LockTime.Text      = $"Час: {_lockMs} мс";
-
-        UpdateSpeedComparison();
-        SetBusy(LockBtn, false);
-    }
-
-    private async void OnInterlockedClick(object sender, RoutedEventArgs e)
-    {
-        var (threads, iterations, expected) = ParseInputs();
-        ILExpected.Text = $"{expected:N0}";
-        ILResult.Text   = "Виконується...";
-        ILTime.Text     = "";
-        SetBusy(ILBtn, true);
-
-        _interlockedCounter.Reset();
-        ILProgress.Maximum = expected;
-        ILProgress.Value   = 0;
-
-        var sw = Stopwatch.StartNew();
-        await Task.Run(() =>
+        // ── Обробка одного файлу (імітація важкої роботи) ─────────────
+        private static void ProcessImageFile(string filePath)
         {
-            var tasks = new Task[threads];
-            for (int i = 0; i < threads; i++)
+            // Читаємо зображення, застосовуємо розмиття (CPU-bound), зберігаємо
+            using var original = new Bitmap(filePath);
+            using var processed = ApplyGaussianBlur(original);
+
+            var outputDir = Path.Combine(
+                Path.GetDirectoryName(filePath)!, "processed");
+            Directory.CreateDirectory(outputDir);
+
+            var outputPath = Path.Combine(outputDir,
+                "proc_" + Path.GetFileName(filePath));
+            processed.Save(outputPath, ImageFormat.Jpeg);
+
+            // Затримка для наочності (видалити у реальному проекті)
+            Thread.Sleep(50);
+        }
+
+        // Просте розмиття (аналог Gaussian blur через averaging)
+        private static Bitmap ApplyGaussianBlur(Bitmap source)
+        {
+            var result = new Bitmap(source.Width, source.Height);
+            int radius = 2;
+
+            for (int y = radius; y < source.Height - radius; y++)
             {
-                tasks[i] = Task.Run(() =>
+                for (int x = radius; x < source.Width - radius; x++)
                 {
-                    for (int j = 0; j < iterations; j++)
-                        _interlockedCounter.Increment();
-                });
+                    int r = 0, g = 0, b = 0, count = 0;
+                    for (int dy = -radius; dy <= radius; dy++)
+                    {
+                        for (int dx = -radius; dx <= radius; dx++)
+                        {
+                            var pixel = source.GetPixel(x + dx, y + dy);
+                            r += pixel.R; g += pixel.G; b += pixel.B; count++;
+                        }
+                    }
+                    result.SetPixel(x, y, Color.FromArgb(r/count, g/count, b/count));
+                }
             }
-            Task.WaitAll(tasks);
-        });
-        sw.Stop();
-        _interlockedMs = sw.ElapsedMilliseconds;
+            return result;
+        }
 
-        long result    = _interlockedCounter.Value;
-        ILResult.Text  = $"{result:N0}";
-        ILProgress.Value = result;
-        ILTime.Text    = $"Час: {_interlockedMs} мс";
+        // ── Допоміжні методи ──────────────────────────────────────────
+        private static bool IsImageFile(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext is ".jpg" or ".jpeg" or ".png" or ".bmp";
+        }
 
-        UpdateSpeedComparison();
-        SetBusy(ILBtn, false);
-    }
+        private bool ValidateInput()
+        {
+            if (_imageFiles == null || _imageFiles.Length == 0)
+            {
+                MessageBox.Show("Спочатку виберіть папку із зображеннями!",
+                    "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+            return true;
+        }
 
-    private void OnAddTask(object sender, RoutedEventArgs e)
-    {
-        int id = Interlocked.Increment(ref _taskIdCounter);
-        var item = new WorkItem(id, $"Завдання {id}", DateTime.Now);
+        private void SetUiBusy(bool busy)
+        {
+            BtnSequential.IsEnabled = !busy;
+            BtnParallel.IsEnabled   = !busy;
+        }
 
-        if (_taskQueue?.TryEnqueue(item) == true)
-            UpdateTaskLog(id, $"○ Завдання #{id} — в черзі", "#a6adc8");
-        else
-            UpdateTaskLog(id, $"✗ Завдання #{id} — черга переповнена", "#f38ba8");
-    }
+        private void ResetProgress(int total)
+        {
+            ProgressBar.Maximum = total;
+            ProgressBar.Value   = 0;
+            ProgressText.Text   = $"0 / {total}";
+        }
 
-    private void OnClearLog(object sender, RoutedEventArgs e)
-    {
-        TaskLog.Items.Clear();
-    }
+        private void UpdateSpeedup()
+        {
+            if (_sequentialMs > 0 && _parallelMs > 0)
+            {
+                double speedup = (double)_sequentialMs / _parallelMs;
+                SpeedupText.Text = $"{speedup:F1}x";
+            }
+        }
 
-    protected override void OnClosed(EventArgs e)
-    {
-        _taskQueue?.Dispose();
-        base.OnClosed(e);
+        private void Log(string message)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+            LogText.Text += $"[{timestamp}] {message}\n";
+        }
+
+        private void ClearLog()
+        {
+            LogText.Text = string.Empty;
+        }
     }
 }
 ```
 
----
+## Progress\<T\>: чому це важливо
 
-## Що ми спостерігаємо при запуску
+`Progress<T>` — клас, що дозволяє безпечно звітувати про прогрес із фонових потоків у UI-потік:
 
-### Панель "БЕЗ СИНХРОНІЗАЦІЇ"
+```csharp
+// ПРОБЛЕМА: пряме оновлення UI з не-UI потоку — виняток!
+await Task.Run(() =>
+{
+    Parallel.ForEach(files, file =>
+    {
+        ProcessFile(file);
+        ProgressBar.Value++;  // ❌ InvalidOperationException!
+    });
+});
 
-Запустіть кілька разів — результат кожного разу різний:
+// РІШЕННЯ: Progress<T> — автоматично маршалює виклик у UI-потік
+var progress = new Progress<int>(value =>
+{
+    ProgressBar.Value = value;  // ✅ Завжди виконується в UI-потоці
+});
 
+await Task.Run(() =>
+{
+    int count = 0;
+    Parallel.ForEach(files, file =>
+    {
+        ProcessFile(file);
+        ((IProgress<int>)progress).Report(Interlocked.Increment(ref count));
+    });
+});
 ```
-Запуск 1: Отримано 347 821  (втрачено 152 179 оновлень — 30.4%)
-Запуск 2: Отримано 423 905  (втрачено  76 095 оновлень — 15.2%)
-Запуск 3: Отримано 500 000  (пощастило — але це виняток!)
-```
 
-:::danger Чому іноді виходить 500 000?
-При малій кількості ітерацій або на швидкому одноядерному процесорі потоки можуть чергуватись "вдало" і не перетинатись. Але це — випадковість, а не коректність. На multi-core системах при великій кількості ітерацій race condition проявляється майже завжди.
+:::info Як працює Progress\<T\>
+При створенні `Progress<T>` зберігає `SynchronizationContext` поточного потоку (UI-потоку). При виклику `Report()` з будь-якого потоку — колбек автоматично диспетчеризується у збережений контекст. Це потокобезпечна альтернатива `Dispatcher.Invoke`.
 :::
 
-### Порівняння `lock` vs `Interlocked`
+## Порівняння часу: Stopwatch
 
-| Метод | Результат | Час (5 потоків × 100k) |
-|---|---|---|
-| Без синхронізації | ~350 000–490 000 (непередбачувано) | ~50–80 мс |
-| `lock` | 500 000 (завжди) | ~300–500 мс |
-| `Interlocked` | 500 000 (завжди) | ~80–150 мс |
+```csharp
+using System.Diagnostics;
 
-`Interlocked` в 3–5 разів швидший за `lock` для простих числових операцій, бо використовує апаратні атомарні інструкції процесора замість системного виклику OS для блокування.
+// Правильне використання Stopwatch
+var sw = Stopwatch.StartNew();   // StartNew() = new Stopwatch() + Start()
 
-### Черга завдань
+// ... операція ...
 
-Натисніть "Додати завдання" кілька разів швидко — ви побачите, як завдання:
-1. З'являються в черзі зі статусом "в черзі"
-2. Переходять у стан "виконується" одне за одним
-3. Завершуються із зеленим "виконано"
+sw.Stop();
+Console.WriteLine($"Час: {sw.ElapsedMilliseconds} мс");
+Console.WriteLine($"Точний час: {sw.Elapsed.TotalMilliseconds:F3} мс");
 
-`BlockingCollection` гарантує FIFO-порядок і автоматично блокує воркер-потік, коли черга порожня — без `while(true) { Thread.Sleep(10); }`.
+// Перезапуск без виділення нового об'єкту
+sw.Restart();
+// ... друга операція ...
+sw.Stop();
+
+// Порівняння
+double speedup = firstMs / (double)secondMs;
+Console.WriteLine($"Прискорення: {speedup:F2}x");
+```
+
+:::tip Точний замір часу
+Для точних вимірювань запускайте операцію кілька разів і беріть середнє або медіану. Перший запуск може бути повільнішим через JIT-компіляцію та прогрів кешу.
+:::
 
 ---
 
-## Підсумок: коли що використовувати
+## Підсумкова таблиця: що коли використовувати
 
-| Сценарій | Рекомендований засіб |
-|---|---|
-| Захист будь-якого складного коду | `lock` — простий і надійний |
-| Лічильники, прапорці, заміна посилань | `Interlocked` — найшвидший |
-| Очікування умови (producer-consumer) | `Monitor.Wait/Pulse` або `BlockingCollection` |
-| Обмеження кількості паралельних операцій | `SemaphoreSlim` |
-| Між-процесна синхронізація | `Mutex` (named) |
-| Кеш: багато читань, рідкісний запис | `ReaderWriterLockSlim` |
-| Потокобезпечна черга | `ConcurrentQueue<T>` або `BlockingCollection<T>` |
-| Потокобезпечний словник | `ConcurrentDictionary<K,V>` |
-| Незмінний snapshot стану | `ImmutableDictionary` / `ImmutableList` |
+| Інструмент | Рівень | Коли використовувати | Коли уникати |
+|---|---|---|---|
+| **`Thread`** | Низький | Довготривалі фонові задачі, точний контроль | Майже завжди — є кращі варіанти |
+| **`Task`** | Середній | Асинхронні операції, `async/await` | Рідко потрібен напряму |
+| **`Parallel`** | Середній | CPU-bound цикли над великими колекціями | IO-bound задачі, малі колекції |
+| **`PLINQ`** | Середній | CPU-bound LINQ-запити над великими масивами | IO-bound, потрібен строгий порядок |
+| **`TPL Dataflow`** | Вищий | Конвеєрна обробка, поєднання CPU+IO стадій | Прості одноетапні задачі |
+| **`async/await`** | Середній | IO-bound: мережа, диск, БД | CPU-bound обчислення |
+| **`Channel<T>`** | Середній | Producer-consumer, стрімінг даних | Складна топологія графу |
 
-:::tip Золоте правило синхронізації
-Найкраща синхронізація — та, яку вдається уникнути. Проектуйте класи так, щоб кожен потік працював із власними даними. Якщо без спільних даних не обійтись — спочатку спробуйте `Interlocked` або `ConcurrentXxx`, і лише якщо цього недостатньо — переходьте до `lock` або більш складних примітивів.
+## Загальні рекомендації
+
+### CPU-bound задачі → Parallel / PLINQ
+
+```csharp
+// ✅ Правильно: обчислення → Parallel
+Parallel.ForEach(largeDataSet, item => HeavyComputation(item));
+
+// ✅ Правильно: LINQ + обчислення → PLINQ
+var results = data.AsParallel()
+                  .Where(x => ExpensiveFilter(x))
+                  .Select(x => ExpensiveTransform(x))
+                  .ToArray();
+```
+
+### IO-bound задачі → async/await
+
+```csharp
+// ✅ Правильно: мережеві запити → async/await + Task.WhenAll
+var tasks = urls.Select(url => httpClient.GetStringAsync(url));
+var responses = await Task.WhenAll(tasks);
+
+// ✅ Правильно: читання файлів → async IO
+var contents = await Task.WhenAll(
+    files.Select(f => File.ReadAllTextAsync(f))
+);
+
+// ❌ Неправильно: Parallel для IO-bound — не дає переваги
+Parallel.ForEach(urls, url => httpClient.GetString(url));  // блокує потоки!
+```
+
+### Складні конвеєри → TPL Dataflow
+
+```csharp
+// ✅ Правильно: читання (IO) → обробка (CPU) → збереження (IO)
+// Кожна стадія оптимізована окремо через MaxDegreeOfParallelism
+var readBlock   = new TransformBlock<string, byte[]>(ReadFileAsync,
+    new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 8 });  // IO: більше потоків
+var processBlock = new TransformBlock<byte[], byte[]>(ProcessData,
+    new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = Environment.ProcessorCount });
+var saveBlock   = new ActionBlock<byte[]>(SaveFileAsync,
+    new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 8 });  // IO: більше потоків
+```
+
+:::tip Золоте правило
+Питайте себе: **чому задача повільна?** Якщо відповідь — _"процесор завантажений"_, використовуйте `Parallel`/`PLINQ`. Якщо відповідь — _"чекаємо мережу/диск"_, використовуйте `async/await`. Якщо обидва — `TPL Dataflow` з різними налаштуваннями для кожної стадії.
 :::

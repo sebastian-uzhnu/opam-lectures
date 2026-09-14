@@ -2,556 +2,380 @@
 sidebar_position: 3
 ---
 
-# Interlocked та потокобезпечні колекції
+# TPL Dataflow: конвеєрна обробка
 
-## Interlocked: атомарні операції без lock
+## Концепція Dataflow
 
-Клас `System.Threading.Interlocked` надає **атомарні** операції над числовими типами та посиланнями. Атомарна операція виконується як єдине неподільне ціле — жоден інший потік не може "вклинитись" посередині.
+**TPL Dataflow** — це бібліотека для побудови **конвеєрів обробки даних**. Уявіть збиральну лінію на заводі: кожна станція виконує свою операцію і передає результат наступній.
 
-:::info Що таке атомарність?
-Процесор виконує `Interlocked.Increment` за допомогою спеціальної інструкції `LOCK XADD` (x86), яка апаратно гарантує атомарність. Це набагато швидше, ніж захоплення `lock` (Monitor), бо не потребує переходу в режим ядра ОС.
-:::
+```
+Концепція конвеєра:
 
-### `Interlocked.Increment` та `Decrement`
+[Дані] → [Блок 1] → [Блок 2] → [Блок 3] → [Результат]
+           читання   обробка    збереження
+
+Кожен блок:
+  • має власну чергу вхідних даних
+  • обробляє елементи паралельно (якщо налаштовано)
+  • передає результат підключеним блокам
+```
+
+Переваги над `Parallel.ForEach`:
+- **Конвеєрний паралелізм**: різні блоки обробляють різні елементи одночасно
+- **Зворотний тиск (backpressure)**: `BoundedCapacity` запобігає переповненню пам'яті
+- **Гнучка топологія**: блоки можна з'єднувати у складні графи (не тільки лінійно)
+- **Поєднання з async/await**: блоки підтримують асинхронні операції
+
+## NuGet-пакет
+
+TPL Dataflow не входить до BCL і потребує встановлення пакету:
+
+```bash
+dotnet add package System.Threading.Tasks.Dataflow
+```
 
 ```csharp
-using System.Threading;
+using System.Threading.Tasks.Dataflow;
+```
 
-class InterlockedDemo
+## ActionBlock\<T\>: найпростіший блок
+
+`ActionBlock<T>` — блок, який просто виконує дію для кожного елемента. Він не передає результат далі — це кінцева точка конвеєра.
+
+```csharp
+// Створення блоку
+var printer = new ActionBlock<string>(message =>
 {
-    private static int _counter = 0;
-    private static int _activeConnections = 0;
+    Console.WriteLine($"[{Thread.CurrentThread.ManagedThreadId}] {message}");
+});
 
-    // Безпечний лічильник без lock
-    public static int GetNext() => Interlocked.Increment(ref _counter);
+// Надсилання елементів
+printer.Post("Перше повідомлення");
+printer.Post("Друге повідомлення");
+printer.Post("Третє повідомлення");
 
-    // Відстеження активних підключень
-    public static void OnConnect()    => Interlocked.Increment(ref _activeConnections);
-    public static void OnDisconnect() => Interlocked.Decrement(ref _activeConnections);
-    public static int  ActiveCount   => Interlocked.CompareExchange(ref _activeConnections, 0, 0);
+// Сигналізуємо про завершення вхідних даних
+printer.Complete();
 
-    static void Main()
+// Чекаємо обробки всіх елементів
+await printer.Completion;
+Console.WriteLine("Всі елементи оброблено");
+```
+
+### ActionBlock з паралельною обробкою
+
+```csharp
+var options = new ExecutionDataflowBlockOptions
+{
+    MaxDegreeOfParallelism = 4,    // до 4 елементів одночасно
+    BoundedCapacity = 100          // максимум 100 елементів у черзі
+};
+
+var parallelProcessor = new ActionBlock<int>(
+    async item =>
     {
-        var tasks = new Task[10];
-        for (int i = 0; i < 10; i++)
+        await Task.Delay(100);     // імітуємо асинхронну роботу
+        Console.WriteLine($"Оброблено {item} на потоці {Thread.CurrentThread.ManagedThreadId}");
+    },
+    options
+);
+
+for (int i = 0; i < 20; i++)
+{
+    await parallelProcessor.SendAsync(i);  // SendAsync чекає якщо черга повна
+}
+
+parallelProcessor.Complete();
+await parallelProcessor.Completion;
+```
+
+:::tip Post vs SendAsync
+`Post()` — синхронний, повертає `false` якщо черга повна (`BoundedCapacity`). `SendAsync()` — асинхронний, чекає до звільнення місця в черзі. Для надійної роботи з `BoundedCapacity` використовуйте `SendAsync`.
+:::
+
+## TransformBlock\<TIn, TOut\>: трансформація елементів
+
+`TransformBlock<TIn, TOut>` приймає елемент типу `TIn`, обробляє його і передає результат типу `TOut` наступному блоку:
+
+```csharp
+// Блок перетворює рядок на його довжину
+var lengthBlock = new TransformBlock<string, int>(
+    s => s.Length
+);
+
+// Блок виводить довжину
+var printBlock = new ActionBlock<int>(
+    length => Console.WriteLine($"Довжина: {length}")
+);
+
+// З'єднуємо блоки
+lengthBlock.LinkTo(printBlock, new DataflowLinkOptions { PropagateCompletion = true });
+
+// Надсилаємо рядки
+lengthBlock.Post("Hello");
+lengthBlock.Post("World!");
+lengthBlock.Post("Привіт, .NET Dataflow!");
+
+lengthBlock.Complete();
+await printBlock.Completion;
+```
+
+### TransformBlock з асинхронною операцією
+
+```csharp
+// Асинхронне завантаження URL
+var downloader = new TransformBlock<string, string>(
+    async url =>
+    {
+        using var client = new HttpClient();
+        var html = await client.GetStringAsync(url);
+        return $"{url}: {html.Length} символів";
+    },
+    new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 5 }
+);
+
+var printer = new ActionBlock<string>(Console.WriteLine);
+downloader.LinkTo(printer, new DataflowLinkOptions { PropagateCompletion = true });
+
+downloader.Post("https://example.com");
+downloader.Post("https://microsoft.com");
+downloader.Complete();
+await printer.Completion;
+```
+
+## BufferBlock\<T\>: буферизація
+
+`BufferBlock<T>` просто зберігає елементи в черзі і передає їх підключеним блокам. Це корисно для роз'єднання виробника і споживача:
+
+```csharp
+var buffer = new BufferBlock<int>(new DataflowBlockOptions { BoundedCapacity = 10 });
+
+// Виробник (producer)
+var producerTask = Task.Run(async () =>
+{
+    for (int i = 0; i < 50; i++)
+    {
+        await buffer.SendAsync(i);  // чекає якщо буфер повний
+        Console.WriteLine($"Додано: {i}");
+    }
+    buffer.Complete();
+});
+
+// Споживач (consumer)
+var consumer = new ActionBlock<int>(
+    async item =>
+    {
+        await Task.Delay(50);  // повільний споживач
+        Console.WriteLine($"Оброблено: {item}");
+    }
+);
+
+buffer.LinkTo(consumer, new DataflowLinkOptions { PropagateCompletion = true });
+
+await Task.WhenAll(producerTask, consumer.Completion);
+```
+
+## BroadcastBlock\<T\>: розсилка всім нащадкам
+
+`BroadcastBlock<T>` надсилає **копію** кожного елемента **всім** підключеним блокам одночасно:
+
+```csharp
+// Один елемент → кілька обробників паралельно
+var broadcaster = new BroadcastBlock<string>(msg => msg);  // клон-функція
+
+var logBlock    = new ActionBlock<string>(msg => Console.WriteLine($"[LOG] {msg}"));
+var auditBlock  = new ActionBlock<string>(msg => SaveToAudit(msg));
+var alertBlock  = new ActionBlock<string>(msg => CheckAndAlert(msg));
+
+// Підключаємо всіх слухачів
+broadcaster.LinkTo(logBlock);
+broadcaster.LinkTo(auditBlock);
+broadcaster.LinkTo(alertBlock);
+
+// Кожне повідомлення отримають всі три блоки
+broadcaster.Post("Користувач увійшов у систему");
+broadcaster.Post("Помилка авторизації");
+```
+
+:::warning BroadcastBlock і втрата даних
+`BroadcastBlock` зберігає лише **останній** елемент. Якщо підключений блок ще обробляє попередній елемент, новий елемент може бути пропущений. Для гарантованої доставки використовуйте `BufferBlock` після `BroadcastBlock`.
+:::
+
+## LinkTo: з'єднання блоків у конвеєр
+
+`LinkTo` — метод для з'єднання двох блоків. Підтримує фільтрацію:
+
+```csharp
+var source = new TransformBlock<int, int>(n => n * n);  // квадрати
+var evenSink = new ActionBlock<int>(n => Console.WriteLine($"Парний: {n}"));
+var oddSink  = new ActionBlock<int>(n => Console.WriteLine($"Непарний: {n}"));
+var discardSink = DataflowBlock.NullTarget<int>();  // "кошик" для відхилених
+
+var linkOptions = new DataflowLinkOptions { PropagateCompletion = true };
+
+// Передаємо парні числа в evenSink
+source.LinkTo(evenSink, linkOptions, n => n % 2 == 0);
+
+// Передаємо непарні в oddSink
+source.LinkTo(oddSink, linkOptions, n => n % 2 != 0);
+
+// Якщо жоден фільтр не підходить — відхиляємо (без NullTarget блок завис би)
+source.LinkTo(discardSink);
+
+for (int i = 1; i <= 10; i++) source.Post(i * i);
+source.Complete();
+```
+
+## DataflowBlockOptions: MaxDegreeOfParallelism та BoundedCapacity
+
+```csharp
+var blockOptions = new ExecutionDataflowBlockOptions
+{
+    // Скільки елементів блок може обробляти одночасно
+    MaxDegreeOfParallelism = Environment.ProcessorCount,
+
+    // Максимальна кількість елементів у вхідній черзі блоку
+    // DataflowBlockOptions.Unbounded = -1 (без обмежень)
+    BoundedCapacity = 50,
+
+    // Токен скасування
+    CancellationToken = cts.Token,
+
+    // Мінімальна кількість елементів для запуску обробки (оптимізація пакетної обробки)
+    // EnsureOrdered = true  — зберігати порядок виходу (за замовчуванням true)
+    EnsureOrdered = false  // вимикаємо для максимальної продуктивності
+};
+```
+
+| Параметр | Значення | Ефект |
+|---|---|---|
+| `MaxDegreeOfParallelism = 1` | За замовчуванням | Послідовна обробка |
+| `MaxDegreeOfParallelism = N` | N > 1 | Паралельна обробка |
+| `BoundedCapacity = -1` | За замовчуванням | Необмежена черга (ризик OOM) |
+| `BoundedCapacity = N` | N > 0 | Зворотний тиск, SendAsync блокується |
+
+## Complete() та Completion: коректне завершення конвеєра
+
+Правильне завершення конвеєра — критично важливий аспект:
+
+```csharp
+var block1 = new TransformBlock<int, string>(n => n.ToString());
+var block2 = new TransformBlock<string, string>(s => s.ToUpper());
+var block3 = new ActionBlock<string>(Console.WriteLine);
+
+// PropagateCompletion = true: Complete() автоматично поширюється по ланцюжку
+var opts = new DataflowLinkOptions { PropagateCompletion = true };
+block1.LinkTo(block2, opts);
+block2.LinkTo(block3, opts);
+
+// Надсилаємо дані
+for (int i = 0; i < 10; i++) block1.Post(i);
+
+// Сигналізуємо першому блоку про завершення вхідних даних
+block1.Complete();
+
+// Чекаємо завершення ОСТАННЬОГО блоку (Complete поширюється автоматично)
+await block3.Completion;
+Console.WriteLine("Конвеєр завершив роботу");
+```
+
+:::danger Завжди чекайте Completion
+Без `await block.Completion` програма може завершитись до того, як блок обробить всі елементи. Також завжди використовуйте `PropagateCompletion = true` — інакше підключені блоки ніколи не завершаться.
+:::
+
+## Практичний приклад: конвеєр обробки зображень
+
+Розглянемо реалістичний приклад — конвеєр із трьох стадій:
+
+```
+[Список файлів] → [Читання] → [Resize] → [Збереження]
+                  (IO-bound) (CPU-bound) (IO-bound)
+```
+
+```csharp
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Threading.Tasks.Dataflow;
+
+static async Task ProcessImagesAsync(
+    IEnumerable<string> inputFiles,
+    string outputDirectory,
+    CancellationToken ct = default)
+{
+    Directory.CreateDirectory(outputDirectory);
+
+    // --- Стадія 1: Читання файлів (IO-bound, до 4 одночасно) ---
+    var readBlock = new TransformBlock<string, (string Path, Bitmap Image)>(
+        async filePath =>
         {
-            tasks[i] = Task.Run(() =>
+            Console.WriteLine($"Читаємо: {Path.GetFileName(filePath)}");
+            // Завантаження зображення (симуляція через async)
+            var image = await Task.Run(() => new Bitmap(filePath));
+            return (filePath, image);
+        },
+        new ExecutionDataflowBlockOptions
+        {
+            MaxDegreeOfParallelism = 4,
+            BoundedCapacity = 8,
+            CancellationToken = ct
+        }
+    );
+
+    // --- Стадія 2: Зміна розміру (CPU-bound, всі ядра) ---
+    var resizeBlock = new TransformBlock<(string Path, Bitmap Image), (string Path, Bitmap Resized)>(
+        data =>
+        {
+            Console.WriteLine($"Resize: {Path.GetFileName(data.Path)}");
+            var resized = new Bitmap(data.Image, new Size(800, 600));
+            data.Image.Dispose();  // звільняємо оригінал
+            return (data.Path, resized);
+        },
+        new ExecutionDataflowBlockOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            BoundedCapacity = 16,
+            CancellationToken = ct
+        }
+    );
+
+    // --- Стадія 3: Збереження (IO-bound, до 4 одночасно) ---
+    var saveBlock = new ActionBlock<(string Path, Bitmap Resized)>(
+        async data =>
+        {
+            var fileName = Path.GetFileName(data.Path);
+            var outputPath = Path.Combine(outputDirectory, $"thumb_{fileName}");
+            Console.WriteLine($"Зберігаємо: {fileName}");
+            await Task.Run(() =>
             {
-                for (int j = 0; j < 100_000; j++)
-                    Interlocked.Increment(ref _counter);
+                data.Resized.Save(outputPath, ImageFormat.Jpeg);
+                data.Resized.Dispose();
             });
+        },
+        new ExecutionDataflowBlockOptions
+        {
+            MaxDegreeOfParallelism = 4,
+            BoundedCapacity = 8,
+            CancellationToken = ct
         }
-        Task.WaitAll(tasks);
-        Console.WriteLine($"Результат: {_counter}"); // Завжди: 1 000 000
+    );
+
+    // --- З'єднуємо конвеєр ---
+    var linkOpts = new DataflowLinkOptions { PropagateCompletion = true };
+    readBlock.LinkTo(resizeBlock, linkOpts);
+    resizeBlock.LinkTo(saveBlock, linkOpts);
+
+    // --- Запускаємо: подаємо файли у перший блок ---
+    foreach (var file in inputFiles)
+    {
+        await readBlock.SendAsync(file, ct);
     }
+
+    // --- Завершуємо: чекаємо обробки всіх елементів ---
+    readBlock.Complete();
+    await saveBlock.Completion;
+
+    Console.WriteLine("Всі зображення оброблено!");
 }
 ```
 
-### `Interlocked.Add`
-
-```csharp
-class StatisticsTracker
-{
-    private static long _totalBytesProcessed = 0;
-
-    public static void ReportProcessed(long bytes)
-    {
-        // Потокобезпечне додавання — повертає нове значення
-        long newTotal = Interlocked.Add(ref _totalBytesProcessed, bytes);
-        Console.WriteLine($"Оброблено загалом: {newTotal} байт");
-    }
-}
-```
-
-### `Interlocked.Exchange`
-
-Атомарно **замінює** значення і повертає **попереднє**:
-
-```csharp
-class SpinLockExample
-{
-    // 0 = вільно, 1 = зайнято
-    private static int _lockFlag = 0;
-
-    public static void DoExclusive(Action action)
-    {
-        // Spin-lock: крутимось, поки не захопимо
-        while (Interlocked.Exchange(ref _lockFlag, 1) == 1)
-            Thread.SpinWait(10); // не звільняємо процесор повністю
-
-        try
-        {
-            action();
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _lockFlag, 0); // звільняємо
-        }
-    }
-}
-```
-
-### `Interlocked.CompareExchange` (CAS — Compare-And-Swap)
-
-Найпотужніша операція: **атомарно** перевіряє значення і замінює, лише якщо воно дорівнює очікуваному:
-
-```csharp
-class LazyInitExample
-{
-    private static string? _expensiveResource = null;
-
-    // Lock-free ліниве ініціалізування
-    public static string GetResource()
-    {
-        if (_expensiveResource != null)
-            return _expensiveResource;
-
-        var newResource = CreateExpensiveResource(); // може викликатись кількома потоками
-
-        // Записуємо, лише якщо поле досі null (перший потік виграє)
-        var previous = Interlocked.CompareExchange(
-            ref _expensiveResource,
-            newResource,  // нове значення
-            null          // очікуване поточне значення
-        );
-
-        // Якщо previous != null — інший потік вже встиг ініціалізувати
-        return _expensiveResource!;
-    }
-
-    private static string CreateExpensiveResource() => "Ресурс створено о " + DateTime.Now;
-}
-```
-
-### Порівняння: `lock` vs `Interlocked`
-
-```csharp
-// Тест швидкодії: 10 000 000 інкрементів
-class BenchmarkCounter
-{
-    static int _withLock = 0;
-    static int _withInterlocked = 0;
-    static readonly object _lock = new();
-
-    static void Main()
-    {
-        const int iterations = 10_000_000;
-
-        // З lock
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        Parallel.For(0, iterations, _ =>
-        {
-            lock (_lock) { _withLock++; }
-        });
-        sw.Stop();
-        Console.WriteLine($"lock:        {sw.ElapsedMilliseconds} мс");
-
-        // З Interlocked
-        sw.Restart();
-        Parallel.For(0, iterations, _ =>
-        {
-            Interlocked.Increment(ref _withInterlocked);
-        });
-        sw.Stop();
-        Console.WriteLine($"Interlocked: {sw.ElapsedMilliseconds} мс");
-        // Interlocked зазвичай у 3-5 разів швидший
-    }
-}
-```
-
----
-
-## ConcurrentDictionary\<K, V\>
-
-Стандартний `Dictionary<K,V>` **не є потокобезпечним**. При одночасній модифікації з кількох потоків він може пошкодити свою внутрішню структуру.
-
-`ConcurrentDictionary<K,V>` — потокобезпечна альтернатива з атомарними операціями:
-
-### Ключові методи
-
-```csharp
-using System.Collections.Concurrent;
-
-class ConcurrentDictionaryDemo
-{
-    static void Main()
-    {
-        var dict = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        // TryAdd — безпечне додавання
-        bool added = dict.TryAdd("apple", 1);
-        Console.WriteLine($"Додано: {added}"); // true
-
-        // TryGetValue — безпечне читання
-        if (dict.TryGetValue("apple", out int count))
-            Console.WriteLine($"apple: {count}");
-
-        // TryRemove — безпечне видалення
-        if (dict.TryRemove("apple", out int removed))
-            Console.WriteLine($"Видалено значення: {removed}");
-
-        // GetOrAdd — атомарно отримати або додати
-        // Якщо "banana" відсутній — додає зі значенням 0
-        int bananaCount = dict.GetOrAdd("banana", 0);
-
-        // GetOrAdd з фабрикою — фабрика викликається лише якщо ключ відсутній
-        var userProfile = dict.GetOrAdd("charlie", key =>
-        {
-            Console.WriteLine($"Створюємо профіль для {key}");
-            return key.Length; // якесь обчислення
-        });
-
-        // AddOrUpdate — атомарно додати або оновити
-        // Якщо "banana" є — викликає updateFactory
-        int newCount = dict.AddOrUpdate(
-            key: "banana",
-            addValue: 1,                           // якщо ключа немає
-            updateValueFactory: (key, old) => old + 1  // якщо ключ є
-        );
-        Console.WriteLine($"banana: {newCount}");
-    }
-}
-```
-
-### Практичний приклад: підрахунок слів
-
-```csharp
-class WordCounter
-{
-    public static ConcurrentDictionary<string, int> CountWords(string[] texts)
-    {
-        var counts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
-        Parallel.ForEach(texts, text =>
-        {
-            var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var word in words)
-            {
-                // Атомарно: якщо слово нове — додаємо з 1, якщо є — +1
-                counts.AddOrUpdate(word, 1, (_, old) => old + 1);
-            }
-        });
-
-        return counts;
-    }
-
-    static void Main()
-    {
-        string[] texts =
-        {
-            "hello world hello",
-            "world is beautiful",
-            "hello beautiful day"
-        };
-
-        var result = CountWords(texts);
-        foreach (var (word, count) in result.OrderByDescending(x => x.Value))
-            Console.WriteLine($"{word}: {count}");
-    }
-}
-```
-
-### Dictionary + lock vs ConcurrentDictionary
-
-```csharp
-// Підхід 1: Dictionary + lock
-class DictionaryWithLock
-{
-    private readonly Dictionary<int, string> _dict = new();
-    private readonly object _lock = new();
-
-    public string GetOrAdd(int key, string value)
-    {
-        lock (_lock) // весь словник заблокований — читання теж чекають!
-        {
-            if (!_dict.TryGetValue(key, out string? existing))
-            {
-                _dict[key] = value;
-                return value;
-            }
-            return existing;
-        }
-    }
-}
-
-// Підхід 2: ConcurrentDictionary — краще для read-heavy scenarios
-class DictionaryWithConcurrent
-{
-    private readonly ConcurrentDictionary<int, string> _dict = new();
-
-    public string GetOrAdd(int key, string value) =>
-        _dict.GetOrAdd(key, value); // внутрішня сегментація — менше суперечок
-}
-```
-
-:::info Коли ConcurrentDictionary ефективніший?
-`ConcurrentDictionary` розбиває свій внутрішній масив на **сегменти** (за замовчуванням їх стільки, скільки логічних ядер процесора). Операції на різних сегментах не блокують одна одну. Для сценаріїв з переважаючим читанням — це набагато ефективніше, ніж `Dictionary + lock`.
-:::
-
----
-
-## ConcurrentQueue\<T\>
-
-**`ConcurrentQueue<T>`** — потокобезпечна черга FIFO (first-in, first-out) для класичного патерну producer-consumer:
-
-```csharp
-class ConcurrentQueueDemo
-{
-    static readonly ConcurrentQueue<string> _queue = new();
-
-    static void Main()
-    {
-        // Виробники: 3 потоки додають завдання
-        var producers = Enumerable.Range(1, 3).Select(id => Task.Run(() =>
-        {
-            for (int i = 1; i <= 5; i++)
-            {
-                string task = $"Завдання {id}-{i}";
-                _queue.Enqueue(task);
-                Console.WriteLine($"[Вироблено] {task}");
-                Thread.Sleep(Random.Shared.Next(50, 150));
-            }
-        }));
-
-        // Споживач: один потік обробляє завдання
-        var consumer = Task.Run(async () =>
-        {
-            int processed = 0;
-            while (processed < 15) // 3 виробники × 5 завдань
-            {
-                if (_queue.TryDequeue(out string? task))
-                {
-                    Console.WriteLine($"[Оброблено] {task}");
-                    processed++;
-                }
-                else
-                {
-                    await Task.Delay(10); // черга порожня — чекаємо
-                }
-            }
-        });
-
-        Task.WaitAll([..producers, consumer]);
-    }
-}
-```
-
-:::tip `TryDequeue` замість `Count > 0`
-Ніколи не пишіть `if (queue.Count > 0) queue.TryDequeue(...)` — між перевіркою `Count` і викликом `TryDequeue` інший потік може випустити елемент. Завжди просто викликайте `TryDequeue` і перевіряйте повернене `bool`.
-:::
-
----
-
-## ConcurrentBag\<T\>
-
-**`ConcurrentBag<T>`** — потокобезпечний **невпорядкований** набір. Оптимізований для сценаріїв, де **той самий потік** і додає, і витягує елементи (наприклад, пул об'єктів):
-
-```csharp
-class ObjectPool<T>
-{
-    private readonly ConcurrentBag<T> _pool = new();
-    private readonly Func<T> _factory;
-
-    public ObjectPool(Func<T> factory) => _factory = factory;
-
-    public T Rent() =>
-        _pool.TryTake(out T? item) ? item : _factory();
-
-    public void Return(T item) => _pool.Add(item);
-}
-
-// Використання: пул StringBuilder для уникнення частого виділення пам'яті
-class StringBuilderPool
-{
-    private static readonly ObjectPool<System.Text.StringBuilder> _pool =
-        new(() => new System.Text.StringBuilder(256));
-
-    public static string BuildString(Action<System.Text.StringBuilder> action)
-    {
-        var sb = _pool.Rent();
-        sb.Clear();
-        try
-        {
-            action(sb);
-            return sb.ToString();
-        }
-        finally
-        {
-            _pool.Return(sb); // повертаємо в пул
-        }
-    }
-}
-```
-
----
-
-## ConcurrentStack\<T\>
-
-**`ConcurrentStack<T>`** — потокобезпечний стек LIFO:
-
-```csharp
-class ConcurrentStackDemo
-{
-    static void Main()
-    {
-        var stack = new ConcurrentStack<int>();
-
-        // PushRange — пакетне додавання (атомарно)
-        stack.PushRange(new[] { 1, 2, 3, 4, 5 });
-
-        // TryPop — витягнути один елемент
-        if (stack.TryPop(out int top))
-            Console.WriteLine($"TryPop: {top}"); // 5
-
-        // TryPopRange — пакетне витягнення
-        var buffer = new int[3];
-        int popped = stack.TryPopRange(buffer);
-        Console.WriteLine($"TryPopRange ({popped} елементів): {string.Join(", ", buffer[..popped])}");
-
-        // TryPeek — підглянути без видалення
-        if (stack.TryPeek(out int peek))
-            Console.WriteLine($"TryPeek: {peek}"); // 1
-    }
-}
-```
-
----
-
-## BlockingCollection\<T\>: блокуюча черга
-
-**`BlockingCollection<T>`** — найпотужніший інструмент для паттерну producer-consumer. Автоматично **блокує** споживача, якщо черга порожня, і **блокує** виробника, якщо черга переповнена.
-
-```csharp
-class BlockingCollectionDemo
-{
-    // Черга з обмеженням: не більше 10 елементів одночасно
-    static readonly BlockingCollection<string> _queue =
-        new BlockingCollection<string>(boundedCapacity: 10);
-
-    static void Main()
-    {
-        // Виробник
-        var producer = Task.Run(() =>
-        {
-            for (int i = 1; i <= 20; i++)
-            {
-                string item = $"Елемент {i}";
-                _queue.Add(item); // блокується якщо черга повна (>= 10)
-                Console.WriteLine($"[+] Додано: {item} (в черзі: {_queue.Count})");
-                Thread.Sleep(50);
-            }
-            _queue.CompleteAdding(); // сигналізуємо: більше нічого не буде
-        });
-
-        // Споживач — GetConsumingEnumerable автоматично завершується при CompleteAdding
-        var consumer = Task.Run(() =>
-        {
-            foreach (string item in _queue.GetConsumingEnumerable())
-            {
-                // Блокується, якщо черга порожня, і виходить при CompleteAdding
-                Console.WriteLine($"[-] Оброблено: {item}");
-                Thread.Sleep(150); // споживач повільніший — черга заповниться
-            }
-            Console.WriteLine("Споживач завершив роботу");
-        });
-
-        Task.WaitAll(producer, consumer);
-    }
-}
-```
-
-### Pipeline з кількома BlockingCollection
-
-```csharp
-class PipelineDemo
-{
-    static void Main()
-    {
-        var stage1 = new BlockingCollection<int>(5);
-        var stage2 = new BlockingCollection<string>(5);
-
-        // Етап 1: генерація чисел
-        Task.Run(() =>
-        {
-            for (int i = 1; i <= 10; i++)
-            {
-                stage1.Add(i);
-                Console.WriteLine($"[Етап 1] Згенеровано: {i}");
-            }
-            stage1.CompleteAdding();
-        });
-
-        // Етап 2: перетворення
-        Task.Run(() =>
-        {
-            foreach (int num in stage1.GetConsumingEnumerable())
-            {
-                string result = $"число_{num * num}"; // зводимо в квадрат
-                stage2.Add(result);
-                Console.WriteLine($"[Етап 2] Перетворено: {result}");
-            }
-            stage2.CompleteAdding();
-        });
-
-        // Етап 3: виведення результатів
-        foreach (string result in stage2.GetConsumingEnumerable())
-            Console.WriteLine($"[Результат] {result}");
-    }
-}
-```
-
----
-
-## ImmutableCollections: незмінні колекції
-
-Для сценаріїв із переважаючим читанням і рідкісним оновленням можна використовувати **незмінні колекції** з пакету `System.Collections.Immutable`. Будь-яка "зміна" повертає **новий** об'єкт — оригінал залишається незмінним:
-
-```csharp
-using System.Collections.Immutable;
-
-class ImmutableDemo
-{
-    // Спільна конфігурація: читається постійно, оновлюється рідко
-    private static volatile ImmutableDictionary<string, string> _config =
-        ImmutableDictionary<string, string>.Empty;
-
-    // Оновлення — thread-safe завдяки volatile + незмінності
-    public static void UpdateConfig(string key, string value)
-    {
-        // Спроба CAS-оновлення без lock
-        ImmutableDictionary<string, string> original, updated;
-        do
-        {
-            original = _config;
-            updated = original.SetItem(key, value);
-            // Повторюємо, якщо інший потік змінив _config поки ми обчислювали
-        } while (Interlocked.CompareExchange(ref _config!, updated, original) != original);
-    }
-
-    // Читання — завжди безпечне, без lock
-    public static string? GetConfig(string key) =>
-        _config.TryGetValue(key, out string? value) ? value : null;
-}
-```
-
-:::tip Коли використовувати Immutable Collections?
-- Конфігурації, що рідко змінюються
-- Списки дозволів/заборон (allow/deny lists)
-- Snapshots стану для undo/redo
-- Коли потрібно передати "знімок" даних між потоками без копіювання
-
-**Не підходять** для: часто змінюваних структур даних — кожна зміна створює новий об'єкт, що навантажує GC.
-:::
-
----
-
-## Зведена таблиця: вибір потокобезпечної колекції
-
-| Колекція | Аналог | Порядок | Async | Блокування | Коли використовувати |
-|---|---|---|---|---|---|
-| `ConcurrentQueue<T>` | `Queue<T>` | FIFO | Ні | Ні | Потокобезпечна черга, producer-consumer |
-| `ConcurrentStack<T>` | `Stack<T>` | LIFO | Ні | Ні | Потокобезпечний стек |
-| `ConcurrentBag<T>` | `List<T>` | Довільний | Ні | Ні | Пул об'єктів, той самий потік додає/бере |
-| `ConcurrentDictionary<K,V>` | `Dictionary<K,V>` | За ключем | Ні | Ні | Спільний словник, часте читання |
-| `BlockingCollection<T>` | — | Залежить від внутрішньої | Ні | **Так** | Producer-consumer з контролем об'єму |
-| `ImmutableList<T>` / `ImmutableDictionary<K,V>` | `List<T>` / `Dictionary<K,V>` | — | Так | Ні | Read-heavy, рідкісні оновлення |
+Цей конвеєр обробляє кожну стадію паралельно: поки `resizeBlock` змінює розміри одних зображень, `readBlock` вже читає наступні, а `saveBlock` зберігає попередні — класичний конвеєрний паралелізм.

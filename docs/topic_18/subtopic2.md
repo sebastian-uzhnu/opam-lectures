@@ -2,94 +2,102 @@
 sidebar_position: 3
 ---
 
-# Обробка подій миші та клавіатури
+# Події (Events)
 
-Подієво-орієнтована природа Windows Forms визначає, що переважна більшість коду виконується як відповідь на дії користувача — використання миші та клавіатури. Майже всі елементи керування (включаючи саму форму) успадковують набір стандартних подій для цих маніпуляторів.
+Події дозволяють класу або об'єкту повідомляти інші класи чи об'єкти про те, що щось трапилося. Клас, який надсилає (генерує) подію, називається **видавцем** (publisher), а класи, які приймають (обробляють) подію — **підписниками** (subscribers).
 
-## Обробка подій клавіатури
+## Принцип роботи та ключове слово event
 
-Події клавіатури відбуваються лише на тому елементі керування, який наразі має **фокус вводу**. (Фокус можна передавати між елементами за допомогою клавіші `Tab` або кліком миші, програмно це робиться методом `Control.Focus()`).
+Події базуються на делегатах. Ключове слово `event` — це спеціальний модифікатор для оголошення делегата, який накладає певні обмеження:
 
-Існує три основні події клавіатури, що відбуваються у строгому порядку:
+1. Подію можна викликати тільки з класу, в якому вона оголошена.
+2. Ззовні класу доступні лише операції підписки (`+=`) та відписки (`-=`). Присвоєння (`=`) заборонено, щоб не затерти інших підписників.
 
-1. **`KeyDown`**: Спрацьовує одразу, як тільки клавіша натиснута на клавіатурі. Ця подія отримує параметр типу `KeyEventArgs`, який містить корисні властивості:
-   - `KeyCode` — індивідуальний код клавіші (наприклад, `Keys.Enter`, `Keys.F1`).
-   - `Modifiers`, `Shift`, `Control`, `Alt` — показують, чи були одночасно затиснуті клавіші-модифікатори.
-2. **`KeyPress`**: Спрацьовує після `KeyDown`, але лише для клавіш, які генерують символьні значення (літери, цифри, пробіл). Ця подія отримує параметр `KeyPressEventArgs`, який містить властивість `KeyChar` (власне символ типу `char`).
-   - **Перехоплення символів:** Використовуючи властивість `Handled = true` у обробнику `KeyPress`, ви можете заборонити появу небажаного символу у `TextBox` (наприклад, дозволити ввід лише цифр).
-3. **`KeyUp`**: Спрацьовує, коли користувач відпускає затиснуту клавішу. Отримує об'єкт `KeyEventArgs`.
+## Створення власної події
 
-### Приклад: Фільтрація вводу клавіатури (лише цифри)
+Стандартний шаблон для створення подій рекомендує використовувати делегат `EventHandler` або `EventHandler<TEventArgs>`.
 
 ```csharp
-private void txtAge_KeyPress(object sender, KeyPressEventArgs e)
+using System;
+
+namespace EventExample
 {
-    // Якщо введений символ НЕ є цифрою і НЕ є клавішею Backspace (для видалення)
-    if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar))
+    // Аргументи події (дані, що передаються підписникам)
+    public class TemperatureChangedEventArgs : EventArgs
     {
-        // Встановлюємо Handled у true, вказуючи, що подія "оброблена"
-        // і символ не потрапить до TextBox
-        e.Handled = true;
+        public double NewTemperature { get; }
+        public TemperatureChangedEventArgs(double temp) => NewTemperature = temp;
     }
-}
-```
 
-_Примітка: якщо ви хочете перехоплювати всі натискання клавіш на рівні форми (безвідносно того, який елемент має фокус), неохідно встановити форму властивість `KeyPreview = true`, після чого обробляти `KeyDown` вже на самій формі._
-
----
-
-## Обробка подій миші
-
-Події миші відбуваються, коли вказівник миші переміщується над елементом або користувач натискає кнопки миші на елементі.
-
-### Основні події:
-
-- **`MouseEnter`, `MouseHover`, `MouseLeave`**: Спрацьовують, коли вказівник миші _наводиться_ на межі елемента, _застигає_ на ньому і коли _покидає_ елемент, відповідно. Корисно для створення ефектів "підсвічування" або візуальних підказок.
-- **`MouseDown`**: Спрацьовує у момент натискання кнопки миші.
-- **`MouseUp`**: Спрацьовує у момент відпускання кнопки миші.
-- **`Click`, `DoubleClick`**: Спрацьовують при кліку. `Click` — це швидке натискання і відпускання на одному місці.
-- **`MouseMove`**: Відбувається безперервно, поки вказівник миші переміщується в межах елемента.
-
-Для подій `MouseDown`, `MouseUp` та `MouseMove` передається аргумент `MouseEventArgs`, який дає доступ до:
-
-- `Button`: Кнопка миші, яка була натиснута (`MouseButtons.Left`, `Right`, `Middle`).
-- `X`, `Y`: Поточні координати миші у пікселях **відносно елемента**, на якому відбулася подія.
-
-### Приклад: малювання на формі чи Panel
-
-Досить часто `MouseMove` використовується для створення простих графічних редакторів, де зажимання лівої кнопки миші і рух викликає малювання ліній.
-
-```csharp
-private bool isDrawing = false;
-private Point lastPoint;
-
-private void panel1_MouseDown(object sender, MouseEventArgs e)
-{
-    // Починаємо малювати лише при натисканні лівої кнопки
-    if (e.Button == MouseButtons.Left)
+    // Клас-видавець (Publisher)
+    public class Thermostat
     {
-        isDrawing = true;
-        lastPoint = e.Location; // Запам'ятовуємо координати старту
-    }
-}
+        // Оголошення події
+        public event EventHandler<TemperatureChangedEventArgs>? TemperatureChanged;
 
-private void panel1_MouseMove(object sender, MouseEventArgs e)
-{
-    if (isDrawing)
-    {
-        // Отримуємо об'єкт Graphics для малювання на панелі
-        using (Graphics g = panel1.CreateGraphics())
+        private double _currentTemperature;
+
+        public void SetTemperature(double newTemp)
         {
-            // Малюємо лінію від попередньої точки до поточної
-            g.DrawLine(Pens.Black, lastPoint, e.Location);
+            if (_currentTemperature != newTemp)
+            {
+                _currentTemperature = newTemp;
+                // Генерація події
+                OnTemperatureChanged(new TemperatureChangedEventArgs(newTemp));
+            }
         }
-        lastPoint = e.Location; // Оновлюємо попередню точку
+
+        // Захищений віртуальний метод для виклику події
+        protected virtual void OnTemperatureChanged(TemperatureChangedEventArgs e)
+        {
+            // Перевірка на null (?.) гарантує, що подія викличеться тільки якщо є підписники
+            TemperatureChanged?.Invoke(this, e);
+        }
+    }
+
+    // Клас-підписник (Subscriber)
+    class Display
+    {
+        public void OnTempChanged(object? sender, TemperatureChangedEventArgs e)
+        {
+            Console.WriteLine($"Дисплей: Температура змінилася на {e.NewTemperature} градусів.");
+        }
+    }
+
+    class Program
+    {
+        static void Main()
+        {
+            Thermostat thermostat = new Thermostat();
+            Display display = new Display();
+
+            // Підписка на подію
+            thermostat.TemperatureChanged += display.OnTempChanged;
+
+            thermostat.SetTemperature(25);
+            // Виведе: Дисплей: Температура змінилася на 25 градусів.
+
+            // Відписка
+            thermostat.TemperatureChanged -= display.OnTempChanged;
+        }
     }
 }
-
-private void panel1_MouseUp(object sender, MouseEventArgs e)
-{
-    // Завершуємо малювати
-    isDrawing = false;
-}
 ```
+
+## Події у WinForms та WPF
+
+У графічних інтерфейсах (GUI) події є основним механізмом взаємодії. Наприклад, натискання кнопки генерує подію `Click`.
+
+```csharp
+// Приклад у WinForms
+Button myButton = new Button();
+myButton.Text = "Click Me";
+
+// Підписка на подію Click (використання лямбда-виразу як обробника)
+myButton.Click += (sender, e) =>
+{
+    MessageBox.Show("Кнопку натиснуто!");
+};
+```
+
+У WPF принцип такий самий, але часто використовується прив'язка команд (Commands) для MVVM патерну, хоча класичні події також підтримуються.

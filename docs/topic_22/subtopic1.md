@@ -2,234 +2,81 @@
 sidebar_position: 2
 ---
 
-# XML: запис, модифікація та серіалізація об'єктів
+# Контейнери та складні елементи керування
 
-## Створення XML-документа з нуля
+## Контейнери: GroupBox та Panel
 
-`XDocument` дозволяє будувати XML-дерево декларативно через вкладені конструктори:
+Коли інтерфейс користувача містить багато елементів, їх потрібно групувати та організовувати для кращого сприйняття та зручності використання. Для цього в Windows Forms існують «елементи-контейнери». Вони можуть містити в собі інші елементи керування (controls).
 
-```csharp
-var doc = new XDocument(
-    new XDeclaration("1.0", "utf-8", "yes"),
-    new XComment("Список студентів групи ПЗ-21"),
-    new XElement("students",
-        new XElement("student",
-            new XAttribute("id", 1),
-            new XAttribute("active", true),
-            new XElement("name", "Олена Коваль"),
-            new XElement("grade", 92),
-            new XElement("email", "o.koval@uni.edu")
-        ),
-        new XElement("student",
-            new XAttribute("id", 2),
-            new XAttribute("active", true),
-            new XElement("name", "Андрій Мороз"),
-            new XElement("grade", 78),
-            new XElement("email", "a.moroz@uni.edu")
-        )
-    )
-);
+### GroupBox
 
-// Зберігаємо у файл
-doc.Save("students.xml");
-```
+`GroupBox` (Група) — це контейнер, який виділяє свої дочірні елементи візуальною рамкою з можливістю додати текстовий заголовок (властивість `Text`).
 
-Результат у файлі:
-```xml
-<?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<!--Список студентів групи ПЗ-21-->
-<students>
-  <student id="1" active="True">
-    <name>Олена Коваль</name>
-    <grade>92</grade>
-    <email>o.koval@uni.edu</email>
-  </student>
-  <student id="2" active="True">
-    <name>Андрій Мороз</name>
-    <grade>78</grade>
-    <email>a.moroz@uni.edu</email>
-  </student>
-</students>
-```
+- **Візуальна організація:** Допомагає розмежувати логічні блоки інформації (наприклад, блок "Особисті дані" та блок "Дані для доставки").
+- **Логічне групування `RadioButton`:** Як згадувалося раніше, `RadioButton` є взаємовиключними лише в межах свого контейнера. Якщо вам потрібно дві незалежні групи радіокнопок на одній формі, ви просто розміщуєте кожну групу у свій `GroupBox`.
 
-## Збереження у рядок (без файлу)
+### Panel
+
+`Panel` (Панель) — це невидимий за замовчуванням контейнер, який не має ні заголовка, ні рамки (рамку можна включити через властивість `BorderStyle`).
+
+- **Гнучкість у компануванні:** Панелі використовуються для створення складних макетів, об'єднання елементів для їх одночасного приховування або показу (`panel1.Visible = false` сховає і саму панель, і всі елементи на ній).
+- **Прокрутка:** `Panel` підтримує автоматичну появу смуг прокрутки (властивість `AutoScroll = true`), якщо її дочірні елементи виходять за її фізичні межі. Це зручно для створення екземплярів форм, вміст яких не поміщається на екрані.
+
+---
+
+## Використання елементів «дерево» (TreeView)
+
+Елемент `TreeView` призначений для відображення даних в ієрархічному вигляді (наприклад, структура папок на диску).
+
+- **Вузли (Nodes):** Дані у дереві подаються через колекцію об'єктів `TreeNode`. Кожен вузол може мати в собі колекцію дочірніх вузлів, формуючи дерево.
+- **Взаємодія:**
+  - Користувач може розгортати і згортати гілки дерева.
+  - Вузли можуть містити іконки (за допомогою підключеного компонента `ImageList`).
+  - `TreeView` має також можливість показувати `CheckBox` біля кожного вузла (`CheckBoxes = true`).
+
+**Приклад додавання вузлів програмно:**
 
 ```csharp
-// В пам'яті, без файлу
-string xmlString = doc.ToString();
+// Додаємо головний (кореневий) вузол
+TreeNode rootNode = new TreeNode("Корінь (Диск C:)");
+treeView1.Nodes.Add(rootNode);
 
-// Або через StringWriter для контролю кодування
-using var sw = new System.IO.StringWriter();
-doc.Save(sw);
-string result = sw.ToString();
+// Додаємо підлеглі вузли
+TreeNode childNode1 = new TreeNode("Папка 1");
+TreeNode childNode2 = new TreeNode("Папка 2");
+rootNode.Nodes.Add(childNode1);
+rootNode.Nodes.Add(childNode2);
+
+// Додаємо вузол у дочірній вузол
+childNode1.Nodes.Add(new TreeNode("Файл.txt"));
 ```
 
-## Додавання елементів до існуючого документа
+Головною подією `TreeView` є `AfterSelect`, яка спрацьовує, коли користувач клацає на вузол дерева (властивість `e.Node` у `TreeViewEventArgs` буде містити вибраний вузол).
+
+---
+
+## Використання елементів «таблиця» (DataGridView)
+
+Елемент `DataGridView` — це один із найпотужніших та найскладніших елементів Windows Forms, який дозволяє відображати, редагувати та аналізувати дані у вигляді таблиці (з рядками та стовпцями).
+
+- **Відображення даних:** Може працювати у "відв'язаному" (unbound) режимі (коли ви повністю додаєте рядки через код програми) або у режимі прив'язки даних (data-bound mode), де він автоматично генерує стовпці та ілюструє структуру колекції чи таблиці бази даних, задану у його властивість `DataSource`.
+- **Типи стовпців:** Стовпці у таблиці можуть бути різними: текст (`DataGridViewTextBoxColumn`), чек-бокси (`DataGridViewCheckBoxColumn`), випадаючі списки (`DataGridViewComboBoxColumn`), кнопки та навіть зображення.
+- **Можливості редагування:**
+  - Сортування по колонках при натисканні на їх заголовок.
+  - Редагування значень безпосередньо у комірках таблиці (користувач може змінити число прямо в сітці).
+  - Підтримка виділення рядків та комірок.
+
+**Приклад додавання даних програмно:**
 
 ```csharp
-XDocument doc = XDocument.Load("students.xml");
+// Налаштування стовпців (зробити можна і в Designer)
+dataGridView1.Columns.Add("IdColumn", "Код");
+dataGridView1.Columns.Add("NameColumn", "Назва товару");
+dataGridView1.Columns.Add("PriceColumn", "Ціна");
 
-// Новий студент
-var newStudent = new XElement("student",
-    new XAttribute("id", 3),
-    new XAttribute("active", true),
-    new XElement("name", "Марія Лисенко"),
-    new XElement("grade", 95),
-    new XElement("email", "m.lysenko@uni.edu")
-);
-
-// Додати у кінець кореневого елемента
-doc.Root.Add(newStudent);
-
-// Або на початок
-doc.Root.AddFirst(newStudent);
-
-doc.Save("students.xml");
+// Додавання рядків
+dataGridView1.Rows.Add("1", "Ноутбук Dell", "25000");
+dataGridView1.Rows.Add("2", "Миша Logitech", "950");
 ```
 
-## Оновлення існуючих елементів
-
-```csharp
-XDocument doc = XDocument.Load("students.xml");
-
-// Знайти студента з id=1
-XElement student = doc.Root
-    .Elements("student")
-    .FirstOrDefault(s => (int)s.Attribute("id") == 1);
-
-if (student != null)
-{
-    // Змінити значення елемента
-    student.Element("grade").Value = "97";
-
-    // Додати новий елемент
-    student.Add(new XElement("scholarship", true));
-
-    // Змінити атрибут
-    student.SetAttributeValue("active", false);
-}
-
-doc.Save("students.xml");
-```
-
-## Видалення елементів
-
-```csharp
-XDocument doc = XDocument.Load("students.xml");
-
-// Видалити одного студента
-doc.Root
-   .Elements("student")
-   .Where(s => (int)s.Attribute("id") == 2)
-   .Remove();
-
-// Видалити всіх неактивних
-doc.Root
-   .Elements("student")
-   .Where(s => (string)s.Attribute("active") == "False")
-   .Remove();
-
-doc.Save("students.xml");
-```
-
-:::tip Remove() на IEnumerable
-Метод `.Remove()` — розширення LINQ to XML, що безпечно видаляє колекцію елементів. Не викидає `InvalidOperationException` при модифікації колекції під час перебору, бо спочатку матеріалізує список.
-:::
-
-## Серіалізація класів у XML через XmlSerializer
-
-Стандартний .NET спосіб для автоматичного перетворення об'єкта у XML і назад — `XmlSerializer`.
-
-### Клас-модель
-
-```csharp
-using System.Xml.Serialization;
-
-// Атрибути контролюють, як клас серіалізується
-[XmlRoot("student")]
-public class Student
-{
-    [XmlAttribute("id")]
-    public int Id { get; set; }
-
-    [XmlElement("name")]
-    public string Name { get; set; }
-
-    [XmlElement("grade")]
-    public int Grade { get; set; }
-
-    [XmlElement("email")]
-    public string Email { get; set; }
-
-    [XmlIgnore]       // не серіалізувати
-    public string PasswordHash { get; set; }
-}
-
-[XmlRoot("students")]
-public class StudentList
-{
-    [XmlElement("student")]
-    public List<Student> Students { get; set; } = new();
-}
-```
-
-### Серіалізація (об'єкт → XML файл)
-
-```csharp
-var data = new StudentList
-{
-    Students = new List<Student>
-    {
-        new Student { Id = 1, Name = "Олена Коваль",  Grade = 92 },
-        new Student { Id = 2, Name = "Андрій Мороз",  Grade = 78 },
-    }
-};
-
-var serializer = new XmlSerializer(typeof(StudentList));
-using var writer = new StreamWriter("students.xml");
-serializer.Serialize(writer, data);
-```
-
-### Десеріалізація (XML файл → об'єкт)
-
-```csharp
-var serializer = new XmlSerializer(typeof(StudentList));
-using var reader = new StreamReader("students.xml");
-var data = (StudentList)serializer.Deserialize(reader);
-
-foreach (var s in data.Students)
-    Console.WriteLine($"{s.Id}: {s.Name} — {s.Grade}");
-```
-
-## Порівняння XDocument і XmlSerializer
-
-| | `XDocument` (LINQ to XML) | `XmlSerializer` |
-|---|---|---|
-| **Стиль** | Ручне маніпулювання | Автоматична серіалізація |
-| **Гнучкість** | Висока — будь-яка структура | Обмежена атрибутами |
-| **Складна вкладеність** | Зручно через LINQ | Потребує вкладених класів |
-| **Читання чужого XML** | Ідеально | Важко (структура мусить збігатись) |
-| **Зберігання своїх даних** | Нормально | Ідеально |
-
-**Правило вибору:**
-- Читаємо **чужий** XML з невідомою структурою → `XDocument`
-- Зберігаємо **свої** C#-об'єкти у XML → `XmlSerializer`
-
-## Обробка помилок
-
-```csharp
-try
-{
-    XDocument doc = XDocument.Load("data.xml");
-    // ...
-}
-catch (System.IO.FileNotFoundException)
-{
-    // файл не знайдено
-}
-catch (System.Xml.XmlException ex)
-{
-    // XML невалідний
-    Console.WriteLine($"Помилка XML на рядку {ex.LineNumber}: {ex.Message}");
-}
-```
+Подія `CellClick` та `CellContentClick` дозволяють обробляти натиснення на конкретну клітинку таблиці. Щоб дізнатись, яке значення було вибрано, використовується `dataGridView1.CurrentRow` або властивості `e.RowIndex` та `e.ColumnIndex` з параметрів події.

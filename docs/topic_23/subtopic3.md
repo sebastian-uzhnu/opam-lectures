@@ -2,221 +2,147 @@
 sidebar_position: 4
 ---
 
-# Зв'язки між таблицями та транзакції
+# Передача даних між формами
 
-## Зв'язки між таблицями
+У багатовіконних (і особливо в діалогових) додатках найчастішою задачею є комунікація між вікнами. Наприклад: Головна форма відкриває Діалог Налаштувань. Як Головна форма отримає введені користувачем налаштування? Або як Головна форма передасть у Діалог існуючі налаштування перед відкриттям?
 
-Реляційні бази даних зберігають пов'язані дані у **різних таблицях**, з'єднаних через **зовнішні ключі** (Foreign Key).
+Існує декілька правильних способів організації такої передачі даних у C#. Ми розглянемо надійні та безпечні підходи (уникаючи використання глобальних статичних змінних, що вважається поганою практикою).
 
-### Типи зв'язків
+## Спосіб 1: Передача даних через конструктор (Від Головної -> до Дочірньої)
 
-| Тип | Приклад | Реалізація |
-|---|---|---|
-| **Один-до-багатьох** (1:N) | Група → Студенти | `students.group_id` → `groups.id` |
-| **Багато-до-одного** (N:1) | Студент → Група | те саме, інша сторона |
-| **Один-до-одного** (1:1) | Студент → Паспорт | унікальний зовнішній ключ |
-| **Багато-до-багатьох** (N:M) | Студенти ↔ Курси | проміжна таблиця |
+Цей спосіб ідеальний, коли батьківській формі потрібно разово передати початкові дані у дочірню при її створенні.
 
-### Схема "Студенти — Групи"
+Вам потрібно змінити конструктор дочірньої форми так, щоб він приймав параметри.
 
-```
-groups                 students
-┌────┬──────┐          ┌────┬──────────┬───────┬──────────┐
-│ id │ name │          │ id │ name     │ grade │ group_id │
-├────┼──────┤          ├────┼──────────┼───────┼──────────┤
-│  1 │ ПЗ-21│◄─────────┤  1 │ О.Коваль │    92 │        1 │
-│  2 │ ПЗ-22│          │  2 │ А.Мороз  │    78 │        1 │
-└────┴──────┘          │  3 │ М.Биков  │    95 │        2 │
-                       └────┴──────────┴───────┴──────────┘
-```
-
-### Створення таблиць зі зв'язком
+**У дочірній формі (`EditUserForm.cs`):**
 
 ```csharp
-private void EnsureCreated()
+public partial class EditUserForm : Form
 {
-    using var conn = Open();
-    using var cmd  = conn.CreateCommand();
-
-    // Спочатку батьківська таблиця
-    cmd.CommandText = """
-        CREATE TABLE IF NOT EXISTS groups (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT    NOT NULL UNIQUE
-        );
-
-        CREATE TABLE IF NOT EXISTS students (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            name     TEXT    NOT NULL,
-            grade    INTEGER NOT NULL DEFAULT 0,
-            group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL
-        );
-        """;
-    cmd.ExecuteNonQuery();
-}
-```
-
-`REFERENCES groups(id)` — зовнішній ключ. `ON DELETE SET NULL` — якщо групу видалено, `group_id` у студентів стає `NULL` (замість помилки).
-
-### JOIN: об'єднання таблиць
-
-```sql
--- INNER JOIN: тільки студенти, у яких є група
-SELECT s.id, s.name, s.grade, g.name AS group_name
-FROM students s
-INNER JOIN groups g ON s.group_id = g.id;
-
--- LEFT JOIN: всі студенти, для тих без групи — NULL
-SELECT s.id, s.name, s.grade,
-       COALESCE(g.name, 'Без групи') AS group_name
-FROM students s
-LEFT JOIN groups g ON s.group_id = g.id
-ORDER BY g.name, s.name;
-```
-
-### JOIN у C# (ADO.NET)
-
-```csharp
-public record StudentWithGroup(int Id, string Name, int Grade, string GroupName);
-
-public List<StudentWithGroup> GetAllWithGroup()
-{
-    using var conn = Open();
-    using var cmd  = conn.CreateCommand();
-    cmd.CommandText = """
-        SELECT s.id, s.name, s.grade,
-               COALESCE(g.name, 'Без групи') AS group_name
-        FROM students s
-        LEFT JOIN groups g ON s.group_id = g.id
-        ORDER BY g.name, s.name
-        """;
-
-    var result = new List<StudentWithGroup>();
-    using var r = cmd.ExecuteReader();
-    while (r.Read())
+    // Змінений конструктор
+    public EditUserForm(string currentUserName)
     {
-        result.Add(new StudentWithGroup(
-            Id:        r.GetInt32(r.GetOrdinal("id")),
-            Name:      r.GetString(r.GetOrdinal("name")),
-            Grade:     r.GetInt32(r.GetOrdinal("grade")),
-            GroupName: r.GetString(r.GetOrdinal("group_name"))
-        ));
+        InitializeComponent();
+
+        // Використовуємо передані дані
+        txtName.Text = currentUserName;
     }
-    return result;
 }
 ```
 
----
-
-## Транзакції
-
-**Транзакція** — набір операцій, які виконуються як єдине ціле. Або всі операції успішні (`COMMIT`), або всі скасовуються (`ROLLBACK`).
-
-### Навіщо потрібні транзакції
-
-```
-Без транзакції:               З транзакцією:
-─────────────────────         ──────────────────────────
-INSERT student ✓              BEGIN TRANSACTION
-INSERT grade   ✗ (помилка)    INSERT student ✓
-                              INSERT grade   ✗ (помилка)
-Результат: студент є,         ROLLBACK
-але оцінки немає — помилка!   Результат: нічого не збережено ✓
-```
-
-### Синтаксис у ADO.NET
+**У головній формі (виклик):**
 
 ```csharp
-public void AddStudentWithGrades(Student student, List<int> grades)
+private void btnEdit_Click(object sender, EventArgs e)
 {
-    using var conn = Open();
-    using var tx   = conn.BeginTransaction();
+    // Передаємо дані прямо під час створення об'єкта
+    EditUserForm editForm = new EditUserForm("Іван Іванов");
+    editForm.ShowDialog();
+}
+```
 
-    try
+## Спосіб 2: Передача даних через публічні властивості (В обидві сторони)
+
+Це найбільш класичний і потужний метод для роботи з діалоговими вікнами. Ви створюєте публічні властивості (`public property`) у дочірній формі. Батьківська форма може читати та записувати ці властивості.
+
+**У дочірній формі (`SettingsForm.cs`):**
+
+```csharp
+public partial class SettingsForm : Form
+{
+    public SettingsForm()
     {
-        // Операція 1: вставити студента
-        using var insertCmd = conn.CreateCommand();
-        insertCmd.Transaction = tx;
-        insertCmd.CommandText = """
-            INSERT INTO students (name, grade) VALUES ($n, $g);
-            SELECT last_insert_rowid();
-            """;
-        insertCmd.Parameters.AddWithValue("$n", student.Name);
-        insertCmd.Parameters.AddWithValue("$g", student.Grade);
-        int newId = (int)(long)insertCmd.ExecuteScalar();
+        InitializeComponent();
+    }
 
-        // Операція 2: вставити всі оцінки
-        foreach (int g in grades)
+    // Властивість для передачі/отримання імені
+    public string ConfigName
+    {
+        get { return txtConfigName.Text; } // Читання з TextBox
+        set { txtConfigName.Text = value; } // Запис у TextBox
+    }
+
+    // Властивість для передачі/отримання якоїсь опції (Check box)
+    public bool EnableDarkTheme
+    {
+        get { return chkDarkTheme.Checked; }
+        set { chkDarkTheme.Checked = value; }
+    }
+}
+```
+
+**У головній формі (виклик і отримання результату):**
+
+```csharp
+private void btnOpenSettings_Click(object sender, EventArgs e)
+{
+    using (SettingsForm form = new SettingsForm())
+    {
+        // 1. Передаємо поточні дані У дочірню форму
+        form.ConfigName = "Стандартний профіль";
+        form.EnableDarkTheme = false;
+
+        // 2. Показуємо діалог
+        if (form.ShowDialog() == DialogResult.OK)
         {
-            using var gradeCmd = conn.CreateCommand();
-            gradeCmd.Transaction = tx;
-            gradeCmd.CommandText = "INSERT INTO grades (student_id, value) VALUES ($sid, $val)";
-            gradeCmd.Parameters.AddWithValue("$sid", newId);
-            gradeCmd.Parameters.AddWithValue("$val", g);
-            gradeCmd.ExecuteNonQuery();
-        }
+            // 3. Якщо ОК, читаємо змінені дані З дочірньої форми
+            string newConfig = form.ConfigName;
+            bool isDark = form.EnableDarkTheme;
 
-        tx.Commit();  // ← всі операції успішні → зберігаємо
-    }
-    catch
-    {
-        tx.Rollback(); // ← щось пішло не так → скасовуємо все
-        throw;
+            // Застосовуємо отримані зміни до головної форми...
+            ApplySettings(newConfig, isDark);
+        }
     }
 }
 ```
 
-### Транзакція для масової вставки
+## Спосіб 3: Використання подій (Від Дочірньої -> до Головної)
 
-Важлива деталь SQLite: без транзакції кожен `INSERT` — це окрема операція запису на диск. 1000 вставок без транзакції ≈ 5–10 секунд. З транзакцією — менше 100 мс.
+Цей підхід ідеальний для **немодальних** вікон (`Show()`), коли дочірня форма може бути відкритою постійно, і вона має інформувати батьківську форму про якісь події в режимі реального часу (наприклад, вікно-панель інструментів змінює колір пензля, і головна форма повинна негайно це помітити).
+
+Ви створюєте подію (`event`) у дочірній формі, а головна форма на неї "підписується".
+
+**У дочірній (плаваючій) формі (`ToolPaletteForm.cs`):**
 
 ```csharp
-public void BulkInsert(IEnumerable<Student> students)
+public partial class ToolPaletteForm : Form
 {
-    using var conn = Open();
-    using var tx   = conn.BeginTransaction();
-    using var cmd  = conn.CreateCommand();
+    // Оголошуємо власну подію (за допомогою стандартного делегата Action)
+    public event Action<Color> ColorChanged;
 
-    cmd.Transaction = tx;
-    cmd.CommandText = "INSERT INTO students (name, grade, email) VALUES ($n, $g, $e)";
-
-    // Додаємо параметри один раз і перевикористовуємо
-    var pName  = cmd.Parameters.Add("$n", SqliteType.Text);
-    var pGrade = cmd.Parameters.Add("$g", SqliteType.Integer);
-    var pEmail = cmd.Parameters.Add("$e", SqliteType.Text);
-
-    foreach (var s in students)
+    public ToolPaletteForm()
     {
-        pName.Value  = s.Name;
-        pGrade.Value = s.Grade;
-        pEmail.Value = s.Email;
-        cmd.ExecuteNonQuery();
+        InitializeComponent();
     }
 
-    tx.Commit();
+    private void btnRed_Click(object sender, EventArgs e)
+    {
+        // Викидаємо подію, передаючи новий колір
+        // Символ ?. гарантує, що подія викличеться лише якщо на неї хтось підписаний
+        ColorChanged?.Invoke(Color.Red);
+    }
 }
 ```
 
----
+**У головній формі:**
 
-## Підсумок теми
+```csharp
+private void btnShowPalette_Click(object sender, EventArgs e)
+{
+    ToolPaletteForm palette = new ToolPaletteForm();
 
-### Що вивчили
+    // Підписуємося на подію дочірньої форми
+    palette.ColorChanged += Palette_ColorChanged;
 
-| Концепція | Інструмент |
-|---|---|
-| Підключення до SQLite | `SqliteConnection` |
-| Виконання SQL | `SqliteCommand` |
-| Читання результатів | `SqliteDataReader` |
-| Захист від SQL-ін'єкцій | `cmd.Parameters.AddWithValue()` |
-| Зв'язки між таблицями | `FOREIGN KEY`, `JOIN` |
-| Атомарні операції | `BeginTransaction()` / `Commit()` / `Rollback()` |
-| Патерн репозиторій | Клас із методами CRUD |
+    palette.Show(); // Палітра плаває поруч
+}
 
-### Коли використовувати ADO.NET
+// Обробник, який буде спрацьовувати щоразу, коли у палітрі натискають кнопку
+private void Palette_ColorChanged(Color newColor)
+{
+    // Змінюємо колір фону головної форми на отриманий!
+    this.BackColor = newColor;
+}
+```
 
-- Потрібна **максимальна продуктивність** (складні запити, великі обсяги даних)
-- Запити надто **специфічні** для ORM (складні JOIN, оконні функції, рекурсивні CTE)
-- **Навчальний контекст** — розуміння як все працює на низькому рівні
-
-Для більшості продуктових проектів поверх ADO.NET використовують **Entity Framework Core** — ORM, що автоматизує роботу з БД через C#-класи. Це тема наступної лекції.
+Опанувавши вищенаведені три способи взаємодії, ви зможете будувати гнучкі та архітектурно правильні застосунки з будь-якою кількістю і складністю вікон.

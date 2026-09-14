@@ -2,224 +2,103 @@
 sidebar_position: 3
 ---
 
-# Практичні завдання та приклади
+# StringBuilder
 
-Цей розділ містить практичні приклади коду з поясненнями для закріплення теми.
+`StringBuilder` – це спеціалізований клас у C#, який надається для ефективної роботи з рядками, коли потрібні часті
+зміни вмісту рядка. Основна особливість цього класу полягає в тому, що він може змінювати свій вміст без створення нових
+об'єктів, що робить його більш оптимальним у порівнянні зі стандартним класом `String` при виконанні певних типів
+операцій.
 
-## Платіжна система (онлайн-магазин)
+### Особливості класу StringBuilder
 
-```csharp
-abstract class PaymentMethod
-{
-    public abstract void Pay(double amount);
-}
+1. **Мутованість**:
+    - Об'єкти класу `String` у C# є незмінними (immutable). Це означає, що будь-яка зміна рядка фактично створює новий
+      об'єкт, а не змінює існуючий.
+    - `StringBuilder` дозволяє змінювати свій вміст без створення нового об'єкта. Це досягається завдяки тому, що
+      `StringBuilder` працює з динамічним буфером, що дозволяє збільшувати або зменшувати розмір рядка без постійного
+      створення нових об'єктів.
+2. **Ефективність**:
+    - Якщо ви виконуєте часті операції конкатенації або модифікації рядків, використання `String` може бути
+      неефективним, оскільки кожна операція створює новий об'єкт. Це призводить до додаткових витрат на виділення
+      пам'яті та час.
+    - `StringBuilder` знижує ці витрати, оскільки працює з внутрішнім буфером, який змінюється по мірі необхідності.
+3. **Розширюваність**:
+    - `StringBuilder` може автоматично збільшувати розмір свого внутрішнього буфера, якщо ви додаєте більше символів,
+      ніж він може вмістити.
 
-class CreditCardPayment : PaymentMethod
-{
-    public override void Pay(double amount)
-    {
-        Console.WriteLine($"Оплата картою: {amount} грн");
-    }
-}
+### Де використовувати StringBuilder?
 
-class PayPalPayment : PaymentMethod
-{
-    public override void Pay(double amount)
-    {
-        Console.WriteLine($"Оплата через PayPal: {amount} грн");
-    }
-}
+`StringBuilder` доцільно використовувати в тих випадках, коли потрібно виконувати багато операцій над рядками, таких як:
 
-class CryptoPayment : PaymentMethod
-{
-    public override void Pay(double amount)
-    {
-        Console.WriteLine($"Оплата криптовалютою: {amount} грн");
-    }
-}
-```
+- Часті операції додавання (конкатенації) рядків.
+- Додавання або вставка підрядків у різних місцях.
+- Видалення частин рядка або зміна його вмісту.
+- Формування динамічного тексту (наприклад, створення HTML-коду, SQL-запитів, або великих текстових документів).
 
-Питання: - Що зміниться, якщо додати новий тип оплати? - Чи потрібно
-змінювати існуючі класи?
+### Приклад використання StringBuilder
 
----
+### Конкатенація рядків за допомогою StringBuilder
 
-## Гра: персонажі
+Якщо вам потрібно виконати багаторазову конкатенацію рядків, замість використання оператора `+`, краще скористатися
+`StringBuilder`.
 
 ```csharp
-abstract class Character
-{
-    public string Name;
-    public abstract void Attack();
-}
+using System.Text;
 
-class Warrior : Character
-{
-    public override void Attack() => Console.WriteLine("Удар мечем");
-}
+StringBuilder sb = new StringBuilder();
+sb.Append("Hello");
+sb.Append(", ");
+sb.Append("World!");
 
-class Mage : Character
-{
-    public override void Attack() => Console.WriteLine("Вогняна куля");
-}
-
-class Archer : Character
-{
-    public override void Attack() => Console.WriteLine("Постріл з лука");
-}
+string result = sb.ToString();  // "Hello, World!"
 ```
 
-Питання: - Навіщо використовувати базовий тип Character? - Як додати
-нового персонажа?
+### 2. Вставка та видалення символів
 
----
-
-## Повідомлення
+`StringBuilder` дозволяє легко додавати або видаляти символи в будь-якому місці рядка.
 
 ```csharp
-abstract class MessageSender
-{
-    public abstract void Send(string message);
-}
-
-class EmailSender : MessageSender
-{
-    public override void Send(string message)
-    {
-        Console.WriteLine($"Email: {message}");
-    }
-}
-
-class SmsSender : MessageSender
-{
-    public override void Send(string message)
-    {
-        Console.WriteLine($"SMS: {message}");
-    }
-}
+StringBuilder sb = new StringBuilder("Hello World!");
+sb.Insert(5, ", Beautiful");  // "Hello, Beautiful World!"
+sb.Remove(13, 9);            // "Hello, Beautiful!"
 ```
 
----
+### 3. Заміна символів або підрядків
 
-## Транспорт
+Метод `Replace()` дозволяє змінювати певні символи або підрядки в рядку.
 
 ```csharp
-abstract class Transport
-{
-    public abstract double GetFuelConsumption();
-}
-
-class Car : Transport
-{
-    public override double GetFuelConsumption() => 8.5;
-}
-
-class Bus : Transport
-{
-    public override double GetFuelConsumption() => 25;
-}
-
-class ElectricScooter : Transport
-{
-    public override double GetFuelConsumption() => 0;
-}
+StringBuilder sb = new StringBuilder("I love cats");
+sb.Replace("cats", "dogs");  // "I love dogs"
 ```
 
----
+### 4. Динамічна зміна буфера
 
-## Логування
+Клас `StringBuilder` автоматично збільшує свій буфер, якщо потрібно зберегти більше символів.
 
 ```csharp
-abstract class Logger
-{
-    public abstract void Log(string text);
-}
-
-class ConsoleLogger : Logger
-{
-    public override void Log(string text)
-    {
-        Console.WriteLine(text);
-    }
-}
-
-class FileLogger : Logger
-{
-    public override void Log(string text)
-    {
-        Console.WriteLine("Запис у файл: " + text);
-    }
-}
+StringBuilder sb = new StringBuilder(10);  // Стартова ємність 10 символів
+sb.Append("This is a very long string");  // Буфер автоматично розшириться
 ```
 
----
+### Порівняння String і StringBuilder
 
-## Статичний поліморфізм (перевантаження)
+| Характеристика   | String                                                  | StringBuilder                                                      |
+|------------------|---------------------------------------------------------|--------------------------------------------------------------------|
+| **Мутованість**  | Незмінний (immutable), кожна зміна створює новий об'єкт | Мутований (mutable), змінюється вміст без створення нового об'єкта |
+| **Ефективність** | Не підходить для частих змін рядків                     | Оптимальний для частої конкатенації або модифікації                |
+| **Пам'ять**      | Створюється новий об'єкт при кожній зміні               | Один об'єкт, що змінюється в пам'яті                               |
+| **Використання** | Для роботи з невеликими або рідко змінюваними рядками   | Для частих змін або довгих рядків                                  |
 
-```csharp
-class Printer
-{
-    public void Print(string text)
-    {
-        Console.WriteLine(text);
-    }
+### Коли краще використовувати String?
 
-    public void Print(int number)
-    {
-        Console.WriteLine(number);
-    }
+- Якщо рядки залишаються незмінними після створення (наприклад, для імен, коротких повідомлень, URL тощо).
+- Якщо виконується лише невелика кількість операцій над рядками.
+- Якщо рядки використовуються в якості ключів у структурах даних, таких як словники (якщо важлива незмінність об'єктів).
 
-    public void Print(string text, int count)
-    {
-        for(int i=0;i<count;i++)
-            Console.WriteLine(text);
-    }
-}
-```
+### Коли краще використовувати StringBuilder?
 
----
+- Якщо виконується багаторазова конкатенація рядків або побудова рядків у циклах.
+- Якщо необхідно динамічно модифікувати рядок: додавати, видаляти або змінювати підрядки.
+- При роботі з великими текстовими даними або форматуванням.
 
-# Контрольні запитання
-
-1. Що таке наслідування?
-2. Чим відрізняється базовий клас від похідного?
-3. Для чого використовується ключове слово virtual?
-4. Коли застосовується override?
-5. Що таке поліморфізм?
-6. Чим відрізняється динамічний та статичний поліморфізм?
-7. Наведіть приклад перевантаження методу.
-8. Що означає ключове слово sealed?
-9. Чому поліморфізм зменшує кількість умовних операторів?
-10. У яких випадках краще використовувати абстрактний клас?
-
----
-
-# Тестові запитання
-
-1. Яке ключове слово дозволяє перевизначення методу?  
-   A) static  
-   B) sealed  
-   C) virtual  
-   D) private
-
-2. Яке слово використовується в похідному класі?  
-   A) new  
-   B) override  
-   C) base  
-   D) this
-
-3. Який тип поліморфізму використовує перевантаження методів?  
-   A) Динамічний  
-   B) Інтерфейсний  
-   C) Статичний  
-   D) Абстрактний
-
-4. Чи можна створити об'єкт абстрактного класу?  
-   A) Так  
-   B) Ні
-
-5. Який модифікатор доступу дозволяє доступ у похідних класах?  
-   A) private  
-   B) protected  
-   C) sealed  
-   D) const

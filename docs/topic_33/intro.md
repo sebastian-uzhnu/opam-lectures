@@ -2,434 +2,325 @@
 sidebar_position: 1
 ---
 
-# Стан гонки та lock
+# Parallel.For та Parallel.ForEach
 
-## Що таке стан гонки (race condition)
+## Паралелізм vs Конкурентність
 
-Коли кілька потоків одночасно звертаються до спільних даних і **хоча б один із них виконує запис**, виникає ситуація, яку називають **станом гонки** (race condition). Результат програми стає непередбачуваним і залежить від того, який потік "прийде першим".
-
-Уявіть двох касирів, що одночасно перевіряють залишок на одному рахунку та знімають гроші:
+Ці два терміни часто плутають, але вони описують різні речі:
 
 ```
-Рахунок: 100 грн
+КОНКУРЕНТНІСТЬ (Concurrency)
+Один процесор, кілька задач чергуються:
 
-Потік A (касир 1)          Потік B (касир 2)
-─────────────────────────────────────────────
-читає: balance = 100
-                           читає: balance = 100
-обчислює: 100 - 80 = 20
-                           обчислює: 100 - 90 = 10
-записує: balance = 20
-                           записує: balance = 10   ← перезаписує!
+CPU:  [Task A]--[Task B]--[Task A]--[Task C]--[Task B]--[Task A]
+      ────────────────────────────────────────────────────────────▶ час
+      Задачі здаються одночасними, але насправді чергуються
 
-Результат: 10 грн (а не -70, хоча грошей не вистачало!)
+
+ПАРАЛЕЛІЗМ (Parallelism)
+Кілька процесорів, справжня одночасність:
+
+CPU1: [Task A]──────────────────────────────────────
+CPU2: [Task B]──────────────────────────────────────
+CPU3: [Task C]──────────────────────────────────────
+      ────────────────────────────────────────────────▶ час
+      Задачі виконуються буквально одночасно
 ```
 
-Обидва касири прочитали одне й те ж значення до того, як хтось із них завершив запис.
+| Характеристика | Конкурентність | Паралелізм |
+|---|---|---|
+| Кількість ядер | 1+ (логічна одночасність) | 2+ (фізична одночасність) |
+| Мета | Відзивчивість (UI не замерзає) | Швидкість (скорочення часу) |
+| Типові задачі | IO-bound (мережа, диск) | CPU-bound (обчислення) |
+| Інструменти .NET | `async/await`, `Task` | `Parallel`, `PLINQ` |
 
----
-
-## Проблема некоректного інкременту
-
-Найпростіший приклад — кілька потоків одночасно збільшують лічильник:
-
-```csharp
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-
-class RaceConditionDemo
-{
-    static int _counter = 0;
-
-    static void Main()
-    {
-        // Запускаємо 5 потоків, кожен інкрементує _counter 100 000 разів
-        var tasks = new Task[5];
-        for (int i = 0; i < 5; i++)
-        {
-            tasks[i] = Task.Run(() =>
-            {
-                for (int j = 0; j < 100_000; j++)
-                {
-                    _counter++; // НЕ атомарна операція!
-                }
-            });
-        }
-
-        Task.WaitAll(tasks);
-
-        // Очікуємо: 500 000
-        // Реальний результат: ~350 000 — ~490 000 (кожен раз різний!)
-        Console.WriteLine($"Результат: {_counter}");
-    }
-}
-```
-
-:::danger Чому `_counter++` небезпечний?
-Оператор `++` — це **три окремі мікрооперації** на рівні процесора:
-1. **Читання** значення з пам'яті в регістр
-2. **Збільшення** значення в регістрі
-3. **Запис** значення з регістра назад у пам'ять
-
-Між будь-якими двома з цих кроків операційна система може перемкнути потік — і тоді один потік перезапише зміни іншого.
+:::info Ключовий висновок
+`async/await` — це конкурентність для IO-bound задач. `Parallel` та `PLINQ` — це паралелізм для CPU-bound задач. Змішувати їх без розуміння — джерело багів.
 :::
 
----
+## Клас Parallel
 
-## Ключове слово `lock`
+`System.Threading.Tasks.Parallel` — статичний клас, що надає три основних методи для паралельного виконання:
 
-`lock` — найпростіший і найпоширеніший спосіб синхронізації в C#. Він гарантує, що **лише один потік** одночасно виконує захищений блок коду.
-
-### Синтаксис
-
-```csharp
-private readonly object _lock = new object();
-
-// У методі:
-lock (_lock)
-{
-    // Критична секція — лише один потік тут одночасно
-    _counter++;
-}
+```
+Parallel
+   ├── For(int from, int to, body)          — паралельний цикл for
+   ├── ForEach(source, body)                — паралельний foreach
+   └── Invoke(action1, action2, ...)        — кілька дій одночасно
 ```
 
-### Як це працює всередині
+Клас автоматично розподіляє роботу між ядрами процесора через `ThreadPool`. Він сам вирішує, скільки потоків використати, — але це можна контролювати через `ParallelOptions`.
 
-`lock` — це **синтаксичний цукор** над класом `Monitor`. Компілятор розгортає його приблизно так:
+## Parallel.For
+
+### Базовий синтаксис
 
 ```csharp
-// Те, що ви пишете:
-lock (_lock)
+// Звичайний for:
+for (int i = 0; i < 10; i++)
 {
-    _counter++;
+    Console.WriteLine($"Ітерація {i}");
 }
 
-// Те, що компілятор генерує:
-bool lockTaken = false;
+// Паралельний аналог:
+Parallel.For(0, 10, i =>
+{
+    Console.WriteLine($"Ітерація {i} на потоці {Thread.CurrentThread.ManagedThreadId}");
+});
+```
+
+:::warning Порядок не гарантований
+`Parallel.For` не гарантує порядок виконання ітерацій. Якщо вивести числа 0–9, вони з'являться у довільному порядку — різні потоки виконують різні ітерації одночасно.
+:::
+
+### ParallelOptions
+
+`ParallelOptions` дозволяє налаштувати поведінку паралельного циклу:
+
+```csharp
+var options = new ParallelOptions
+{
+    // Максимальна кількість одночасних потоків (-1 = необмежено)
+    MaxDegreeOfParallelism = Environment.ProcessorCount,
+
+    // Токен для скасування циклу
+    CancellationToken = cancellationTokenSource.Token,
+
+    // Конкретний планувальник задач (рідко потрібно)
+    TaskScheduler = TaskScheduler.Default
+};
+
+Parallel.For(0, 1_000_000, options, i =>
+{
+    // важке обчислення
+    ProcessItem(i);
+});
+```
+
+**`MaxDegreeOfParallelism`** — найважливіший параметр:
+
+| Значення | Поведінка |
+|---|---|
+| `-1` (за замовчуванням) | Використовує стільки потоків, скільки вважає за потрібне |
+| `1` | Фактично послідовне виконання (корисно для налагодження) |
+| `Environment.ProcessorCount` | Рівно стільки потоків, скільки логічних ядер |
+| `Environment.ProcessorCount / 2` | Половина ядер (щоб не перевантажувати систему) |
+
+### Parallel.For зі скасуванням
+
+```csharp
+using System.Threading;
+
+var cts = new CancellationTokenSource();
+
+// Скасувати через 2 секунди
+cts.CancelAfter(TimeSpan.FromSeconds(2));
+
+var options = new ParallelOptions { CancellationToken = cts.Token };
+
 try
 {
-    Monitor.Enter(_lock, ref lockTaken);
-    _counter++;
-}
-finally
-{
-    if (lockTaken)
-        Monitor.Exit(_lock);
-}
-```
-
-`Monitor.Enter` захоплює **м'ютекс** (взаємне виключення) об'єкта. Якщо інший потік уже захопив цей м'ютекс — поточний потік **блокується** і чекає в черзі. Коли власник виходить із `lock`, один із потоків-очікувачів отримує доступ.
-
-### Виправлений приклад з `lock`
-
-```csharp
-class SafeCounterDemo
-{
-    static int _counter = 0;
-    static readonly object _lock = new object();
-
-    static void Main()
+    Parallel.For(0, 10_000_000, options, i =>
     {
-        var tasks = new Task[5];
-        for (int i = 0; i < 5; i++)
-        {
-            tasks[i] = Task.Run(() =>
-            {
-                for (int j = 0; j < 100_000; j++)
-                {
-                    lock (_lock)
-                    {
-                        _counter++;
-                    }
-                }
-            });
-        }
+        // Перевіряємо скасування вручну (опційно, але рекомендовано)
+        options.CancellationToken.ThrowIfCancellationRequested();
 
-        Task.WaitAll(tasks);
-        Console.WriteLine($"Результат: {_counter}"); // Завжди: 500 000
-    }
+        HeavyComputation(i);
+    });
 }
-```
-
----
-
-## Об'єкт блокування: правила вибору
-
-Як об'єкт для `lock` слід завжди використовувати **приватне readonly поле**:
-
-```csharp
-public class BankAccount
+catch (OperationCanceledException)
 {
-    private readonly object _lock = new object(); // правильно
-
-    private decimal _balance;
-
-    public void Deposit(decimal amount)
-    {
-        lock (_lock)
-        {
-            _balance += amount;
-        }
-    }
-
-    public void Withdraw(decimal amount)
-    {
-        lock (_lock)
-        {
-            if (_balance >= amount)
-                _balance -= amount;
-        }
-    }
+    Console.WriteLine("Паралельний цикл скасовано!");
 }
 ```
 
-:::danger Що НЕ можна використовувати як об'єкт lock
-
-**`lock(this)` — заборонено:**
-```csharp
-lock (this) { ... } // НЕБЕЗПЕЧНО!
-```
-Зовнішній код може теж виконати `lock(myObject)` і створити непередбачуваний deadlock.
-
-**`lock("рядок")` — заборонено:**
-```csharp
-lock ("shared-resource") { ... } // НЕБЕЗПЕЧНО!
-```
-Рядкові літерали **інтернуються** в .NET — усі рядки з однаковим вмістом посилаються на **один і той самий** об'єкт у пам'яті. Це означає, що `lock("shared-resource")` у двох абсолютно різних класах заблокує **один і той самий** об'єкт, навіть якщо вони не пов'язані між собою.
-
-**`lock(typeof(MyClass))` — заборонено:**
-```csharp
-lock (typeof(MyClass)) { ... } // НЕБЕЗПЕЧНО!
-```
-Об'єкти `Type` також є глобальними — один і той самий об'єкт доступний звідусіль. Це може призвести до блокування несвязаного коду.
-
-**Правило:** об'єкт блокування повинен бути `private` (недоступний ззовні) і `readonly` (не може бути переприсвоєний).
+:::tip ThrowIfCancellationRequested
+Parallel.For автоматично перевіряє токен між ітераціями, але якщо одна ітерація дуже довга, доцільно перевіряти вручну всередині тіла циклу.
 :::
 
----
+## Parallel.ForEach
 
-## Deadlock: взаємне блокування
-
-**Deadlock** — ситуація, коли два або більше потоків **нескінченно чекають один одного**, і жоден не може продовжити виконання.
-
-### Класична схема
-
-```
-Потік A                          Потік B
-──────────────────────────────────────────────────
-захоплює lockA ✓
-                                 захоплює lockB ✓
-чекає на lockB... ⏳
-                                 чекає на lockA... ⏳
-        ← обидва чекають вічно →
-```
-
-### Код, що демонструє deadlock
+`Parallel.ForEach` обробляє будь-яку колекцію `IEnumerable<T>` паралельно:
 
 ```csharp
-class DeadlockDemo
+var files = Directory.GetFiles(@"C:\Images", "*.jpg");
+
+Parallel.ForEach(files, filePath =>
 {
-    static readonly object _lockA = new object();
-    static readonly object _lockB = new object();
-
-    static void Main()
-    {
-        var t1 = new Thread(Thread1);
-        var t2 = new Thread(Thread2);
-        t1.Start();
-        t2.Start();
-        // Програма "зависне" — обидва потоки чекають нескінченно
-    }
-
-    static void Thread1()
-    {
-        lock (_lockA)                    // 1. захоплює A
-        {
-            Thread.Sleep(100);           // дає потоку 2 час захопити B
-            lock (_lockB) { /* ... */ }  // 2. чекає на B — DEADLOCK!
-        }
-    }
-
-    static void Thread2()
-    {
-        lock (_lockB)                    // 1. захоплює B
-        {
-            Thread.Sleep(100);           // дає потоку 1 час захопити A
-            lock (_lockA) { /* ... */ }  // 2. чекає на A — DEADLOCK!
-        }
-    }
-}
+    var image = LoadImage(filePath);
+    var resized = ResizeImage(image, 800, 600);
+    SaveImage(resized, filePath + "_thumb.jpg");
+    Console.WriteLine($"Оброблено: {Path.GetFileName(filePath)}");
+});
 ```
 
-### Як уникнути deadlock
+### ForEach з ParallelOptions та локальним станом
 
-:::tip Правила запобігання deadlock
-1. **Завжди захоплюйте lock-и в одному й тому ж порядку.** Якщо потік A і потік B завжди захоплюють `_lockA` перед `_lockB` — deadlock неможливий.
-2. **Мінімізуйте час утримання lock.** Не викликайте зовнішні методи всередині `lock`.
-3. **Використовуйте `Monitor.TryEnter` з таймаутом** — для випадків, коли не хочете блокуватись назавжди.
-4. **Уникайте вкладених lock-ів** — якщо можна обійтись одним об'єктом блокування.
+Для агрегації результатів (наприклад, суми) без гонки даних є перевантаження з локальним станом:
+
+```csharp
+long totalBytes = 0;
+var files = Directory.GetFiles(@"C:\Data");
+
+Parallel.ForEach(
+    files,
+    // Ініціалізація локального стану для кожного потоку
+    localInit: () => 0L,
+    // Тіло: повертає оновлений локальний стан
+    body: (file, loopState, localSum) =>
+    {
+        var info = new FileInfo(file);
+        return localSum + info.Length;   // кожен потік накопичує свою суму
+    },
+    // Фіналізація: об'єднуємо локальні стани потоків атомарно
+    localFinally: localSum =>
+    {
+        Interlocked.Add(ref totalBytes, localSum);
+    }
+);
+
+Console.WriteLine($"Загальний розмір: {totalBytes / 1024 / 1024} МБ");
+```
+
+:::warning Race Condition
+Ніколи не змінюйте спільну змінну всередині `Parallel.ForEach` без синхронізації! Використовуйте або `Interlocked`, або шаблон з локальним станом (показано вище).
 :::
 
-```csharp
-// Виправлений варіант — однаковий порядок захоплення в обох потоках
-static void Thread1Fixed()
-{
-    lock (_lockA)       // спочатку A
-    {
-        lock (_lockB)   // потім B
-        { /* ... */ }
-    }
-}
+## Parallel.Invoke
 
-static void Thread2Fixed()
-{
-    lock (_lockA)       // спочатку A (той самий порядок!)
-    {
-        lock (_lockB)   // потім B
-        { /* ... */ }
-    }
-}
-```
-
----
-
-## Клас Monitor: розширені можливості
-
-`Monitor` надає більше можливостей, ніж просте ключове слово `lock`.
-
-### `TryEnter` з таймаутом
+Запускає кілька незалежних дій паралельно і чекає завершення всіх:
 
 ```csharp
-class MonitorTryEnterDemo
-{
-    private static readonly object _lock = new object();
-    private static int _value = 0;
+Parallel.Invoke(
+    () => ProcessRegionA(data),
+    () => ProcessRegionB(data),
+    () => ProcessRegionC(data),
+    () => GenerateReport(data)
+);
 
-    public static bool TryUpdateValue(int newValue, int timeoutMs = 500)
-    {
-        bool lockTaken = false;
-        try
-        {
-            // Намагаємось захопити lock не більше 500 мс
-            Monitor.TryEnter(_lock, timeoutMs, ref lockTaken);
-
-            if (!lockTaken)
-            {
-                Console.WriteLine("Не вдалось отримати lock — ресурс зайнятий");
-                return false;
-            }
-
-            _value = newValue;
-            return true;
-        }
-        finally
-        {
-            if (lockTaken)
-                Monitor.Exit(_lock);
-        }
-    }
-}
+// Ця рядок виконується лише після завершення ВСІХ чотирьох дій
+Console.WriteLine("Всі задачі завершено");
 ```
 
-### `Monitor.Wait` та `Monitor.Pulse`: паттерн Producer-Consumer
+Це аналог `Task.WhenAll`, але для синхронного коду. Кількість дій не обмежена.
 
-`Monitor.Wait` тимчасово **звільняє** lock і переводить потік у стан очікування. `Monitor.Pulse` будить один із потоків, що очікують.
+## ParallelLoopResult: IsCompleted і LowestBreakIteration
+
+`Parallel.For` і `Parallel.ForEach` повертають `ParallelLoopResult`:
 
 ```csharp
-class ProducerConsumerMonitor
+ParallelLoopResult result = Parallel.For(0, 1000, (i, loopState) =>
 {
-    private static readonly Queue<int> _queue = new Queue<int>();
-    private static readonly object _lock = new object();
-    private static bool _finished = false;
-
-    static void Main()
+    if (CheckCondition(i))
     {
-        var producer = new Thread(Produce);
-        var consumer = new Thread(Consume);
-        producer.Start();
-        consumer.Start();
-        producer.Join();
-        consumer.Join();
+        loopState.Break();   // перервати після поточної ітерації
     }
+    ProcessItem(i);
+});
 
-    static void Produce()
-    {
-        for (int i = 1; i <= 5; i++)
-        {
-            lock (_lock)
-            {
-                _queue.Enqueue(i);
-                Console.WriteLine($"Вироблено: {i}");
-                Monitor.Pulse(_lock); // будимо споживача
-            }
-            Thread.Sleep(200);
-        }
-
-        lock (_lock)
-        {
-            _finished = true;
-            Monitor.Pulse(_lock); // останній сигнал споживачу
-        }
-    }
-
-    static void Consume()
-    {
-        while (true)
-        {
-            lock (_lock)
-            {
-                // Чекаємо, поки черга не стане непустою
-                while (_queue.Count == 0 && !_finished)
-                    Monitor.Wait(_lock); // звільняє lock і чекає
-
-                if (_queue.Count == 0 && _finished)
-                    break;
-
-                int item = _queue.Dequeue();
-                Console.WriteLine($"Спожито: {item}");
-            }
-        }
-    }
-}
+Console.WriteLine($"Завершено повністю: {result.IsCompleted}");
+Console.WriteLine($"Перерваний на ітерації: {result.LowestBreakIteration}");
+// IsCompleted = false, якщо було Break() або Stop()
+// LowestBreakIteration = найменший індекс, на якому викликали Break()
 ```
 
-:::info Monitor.Wait vs Thread.Sleep
-`Monitor.Wait` **звільняє** захоплений lock на час очікування — інші потоки можуть зайти в критичну секцію. `Thread.Sleep` цього НЕ робить — lock утримується під час сну.
+## Break vs Stop у Parallel loops
+
+Ці два методи `ParallelLoopState` поводяться по-різному:
+
+```csharp
+// BREAK: "зупинитись після обробки всіх ітерацій з меншим індексом"
+Parallel.For(0, 100, (i, state) =>
+{
+    if (i == 50) state.Break();
+    // Ітерації 0–49 ГАРАНТОВАНО будуть виконані
+    // Ітерації 51–99 можуть виконатись або ні (залежно від планувальника)
+});
+
+// STOP: "зупинитись якнайшвидше, ігноруючи порядок"
+Parallel.For(0, 100, (i, state) =>
+{
+    if (i == 50) state.Stop();
+    // Жодних гарантій щодо інших ітерацій — зупиняємось НЕГАЙНО
+});
+```
+
+| Метод | Гарантія | Коли використовувати |
+|---|---|---|
+| `Break()` | Всі ітерації < LowestBreakIteration виконаються | Пошук: потрібен найменший відповідний елемент |
+| `Stop()` | Ніяких — якнайшвидша зупинка | Перевірка існування: достатньо будь-якого збігу |
+
+## Коли НЕ варто використовувати Parallel
+
+`Parallel` має накладні витрати: створення потоків, розподіл роботи, синхронізація результатів. Для малих колекцій це може бути **повільніше** за звичайний цикл:
+
+```csharp
+using System.Diagnostics;
+
+var data = Enumerable.Range(0, 100).ToArray();  // лише 100 елементів!
+
+var sw = Stopwatch.StartNew();
+foreach (var x in data) Thread.Sleep(0);  // дуже швидка операція
+sw.Stop();
+Console.WriteLine($"Sequential: {sw.ElapsedMilliseconds} мс");
+
+sw.Restart();
+Parallel.ForEach(data, x => Thread.Sleep(0));
+sw.Stop();
+Console.WriteLine($"Parallel:   {sw.ElapsedMilliseconds} мс");
+// Parallel буде повільніше через overhead планувальника!
+```
+
+:::danger Не паралельте все підряд
+Паралелізм вигідний лише коли:
+1. Колекція велика (тисячі і більше елементів)
+2. Кожна ітерація виконує **реальну CPU-роботу** (обчислення, стиснення, шифрування)
+3. Ітерації **незалежні** одна від одної (немає спільного стану)
+
+Для IO-bound задач (читання файлів, HTTP-запити) використовуйте `async/await`, а не `Parallel`.
 :::
 
----
+## Порівняння: foreach vs Parallel.ForEach
 
-## `volatile`: для простих прапорців
-
-Коли один потік читає змінну, а інший — лише записує в неї, і складна синхронізація не потрібна, можна використати ключове слово `volatile`:
+Розглянемо реалістичний приклад — обчислення чисел Фібоначчі для великого масиву:
 
 ```csharp
-class VolatileDemo
+using System.Diagnostics;
+
+static long Fib(int n)
 {
-    // volatile гарантує, що читання/запис не кешуватиметься в регістрі
-    private static volatile bool _shouldStop = false;
-
-    static void Main()
-    {
-        var worker = new Thread(() =>
-        {
-            Console.WriteLine("Потік запущено");
-            while (!_shouldStop) // завжди читає "свіже" значення з пам'яті
-            {
-                Thread.SpinWait(100);
-            }
-            Console.WriteLine("Потік зупинено");
-        });
-
-        worker.Start();
-        Thread.Sleep(500);
-        _shouldStop = true; // потік побачить цю зміну
-        worker.Join();
-    }
+    if (n <= 1) return n;
+    long a = 0, b = 1;
+    for (int i = 2; i <= n; i++) { long c = a + b; a = b; b = c; }
+    return b;
 }
+
+int[] inputs = Enumerable.Range(30, 1000).ToArray();  // 1000 чисел Фібоначчі
+long[] results = new long[inputs.Length];
+
+// Послідовний підхід
+var sw = Stopwatch.StartNew();
+for (int i = 0; i < inputs.Length; i++)
+{
+    results[i] = Fib(inputs[i]);
+}
+sw.Stop();
+Console.WriteLine($"Sequential: {sw.ElapsedMilliseconds} мс");
+
+// Паралельний підхід
+sw.Restart();
+Parallel.For(0, inputs.Length, i =>
+{
+    results[i] = Fib(inputs[i]);   // безпечно: кожен i унікальний
+});
+sw.Stop();
+Console.WriteLine($"Parallel:   {sw.ElapsedMilliseconds} мс");
+
+// Зразковий результат на 8-ядерному процесорі:
+// Sequential: 142 мс
+// Parallel:    23 мс  (≈6x прискорення)
 ```
 
-:::warning Обмеження `volatile`
-`volatile` вирішує лише проблему **видимості** змін між потоками (compiler/CPU reordering). Він **не захищає** від race condition при складених операціях (читання + модифікація + запис). Для лічильників, що змінюються кількома потоками, використовуйте `Interlocked` або `lock`.
+:::tip Прискорення не дорівнює кількості ядер
+Теоретичний максимум прискорення дорівнює кількості ядер (закон Амдала). На практиці прискорення менше через накладні витрати і те, що частина коду залишається послідовною.
 :::

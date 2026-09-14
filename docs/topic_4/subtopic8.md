@@ -1,3 +1,7 @@
+---
+sidebar_position: 8
+---
+
 # Модифікатори out, ref, params
 
 ## Модифікатори out, ref та params у C#

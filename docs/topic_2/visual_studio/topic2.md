@@ -1,3 +1,7 @@
+---
+sidebar_position: 2
+---
+
 # Основи Visual Studio
 
 ## Поняття рішення і проекту

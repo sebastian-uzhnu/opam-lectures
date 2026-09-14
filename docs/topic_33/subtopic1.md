@@ -2,465 +2,323 @@
 sidebar_position: 2
 ---
 
-# Mutex, Semaphore, ReaderWriterLock
+# PLINQ: паралельний LINQ
 
-## Mutex: між-процесна синхронізація
+## Що таке PLINQ
 
-**`Mutex`** (mutual exclusion — взаємне виключення) — примітив синхронізації, схожий на `lock`, але з однією ключовою відмінністю: він працює **між процесами**, а не лише між потоками в одному процесі.
+**PLINQ (Parallel LINQ)** — це паралельна реалізація LINQ to Objects, вбудована у .NET. Вона автоматично розбиває колекцію на частини, обробляє їх на кількох ядрах і об'єднує результати.
 
-### Анонімний Mutex (в межах одного процесу)
+```
+Звичайний LINQ:
+[елементи] → Where → Select → OrderBy → ToList
+(один потік, послідовно)
+
+PLINQ:
+[елементи] → Розбивка → ┌ Ядро 1: Where → Select ┐
+                         ├ Ядро 2: Where → Select ├ → Об'єднання → OrderBy → ToList
+                         └ Ядро 3: Where → Select ┘
+(кілька потоків паралельно)
+```
+
+## AsParallel() — перетворення LINQ на PLINQ
+
+Достатньо додати `.AsParallel()` у ланцюжок LINQ:
 
 ```csharp
-class MutexDemo
+int[] numbers = Enumerable.Range(1, 10_000_000).ToArray();
+
+// Звичайний LINQ (послідовний):
+var resultSeq = numbers
+    .Where(n => n % 2 == 0)
+    .Select(n => n * n)
+    .ToList();
+
+// PLINQ (паралельний):
+var resultPar = numbers
+    .AsParallel()           // <-- одне слово перетворює на PLINQ
+    .Where(n => n % 2 == 0)
+    .Select(n => n * n)
+    .ToList();
+```
+
+:::info Де ставити AsParallel()
+`AsParallel()` викликається на вхідній колекції, до перших операторів LINQ. Всі подальші оператори (Where, Select, GroupBy тощо) автоматично виконуються паралельно.
+:::
+
+## WithDegreeOfParallelism
+
+Обмежує кількість потоків, які PLINQ може використати:
+
+```csharp
+var result = numbers
+    .AsParallel()
+    .WithDegreeOfParallelism(4)   // не більше 4 потоків
+    .Where(IsPrime)
+    .Select(n => n * 2)
+    .ToArray();
+```
+
+За замовчуванням PLINQ використовує `Environment.ProcessorCount` потоків.
+
+## WithCancellation
+
+Дозволяє скасувати PLINQ-запит через `CancellationToken`:
+
+```csharp
+var cts = new CancellationTokenSource();
+cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+try
 {
-    // false — не захоплювати одразу при створенні
-    private static readonly Mutex _mutex = new Mutex(false);
-
-    static void Main()
-    {
-        var threads = new Thread[3];
-        for (int i = 0; i < 3; i++)
-        {
-            int threadId = i;
-            threads[i] = new Thread(() => DoWork(threadId));
-            threads[i].Start();
-        }
-
-        foreach (var t in threads)
-            t.Join();
-    }
-
-    static void DoWork(int id)
-    {
-        Console.WriteLine($"Потік {id}: чекає на Mutex...");
-        _mutex.WaitOne(); // блокуємось, поки Mutex не стане вільним
-        try
-        {
-            Console.WriteLine($"Потік {id}: увійшов у захищену секцію");
-            Thread.Sleep(500); // імітуємо роботу
-            Console.WriteLine($"Потік {id}: виходить");
-        }
-        finally
-        {
-            _mutex.ReleaseMutex(); // ОБОВ'ЯЗКОВО звільняємо в finally
-        }
-    }
+    var result = numbers
+        .AsParallel()
+        .WithCancellation(cts.Token)
+        .Where(n => HeavyFilter(n))
+        .ToArray();
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("PLINQ-запит скасовано");
 }
 ```
 
-### Named Mutex: між-процесна синхронізація
+## WithExecutionMode
 
-Named Mutex дозволяє двом різним процесам (програмам) синхронізуватись через однакове ім'я:
-
-```csharp
-// Перший екземпляр програми — отримує дозвіл запуску
-class SingleInstanceApp
-{
-    private static Mutex? _instanceMutex;
-
-    static void Main()
-    {
-        // Спробувати створити іменований Mutex
-        _instanceMutex = new Mutex(
-            initiallyOwned: true,
-            name: "Global\\MyUniqueAppName_v1",
-            out bool createdNew
-        );
-
-        if (!createdNew)
-        {
-            Console.WriteLine("Програма вже запущена! Завершення.");
-            return;
-        }
-
-        try
-        {
-            Console.WriteLine("Перший екземпляр запущено. Натисніть Enter для виходу.");
-            Console.ReadLine();
-        }
-        finally
-        {
-            _instanceMutex.ReleaseMutex();
-            _instanceMutex.Dispose();
-        }
-    }
-}
-```
-
-:::tip Префікс "Global\\"
-Префікс `Global\\` робить Mutex видимим для всіх сесій Windows (включно з різними користувачами). Без префіксу Mutex існує лише в межах поточної сесії.
-:::
-
-:::warning Mutex vs lock — що вибрати?
-- Якщо вам потрібна синхронізація лише між потоками **одного процесу** — завжди використовуйте `lock`. Він набагато швидший (мікросекунди проти мілісекунд).
-- `Mutex` має сенс лише коли потрібна **між-процесна** синхронізація.
-:::
-
----
-
-## Semaphore та SemaphoreSlim
-
-**`Semaphore`** — примітив синхронізації, який дозволяє **N потокам** одночасно отримати доступ до ресурсу. Це схоже на вхід у ліфт: якщо ліфт вміщує 5 осіб — 6-й мусить чекати, доки хтось не вийде.
-
-```
-Semaphore(3): дозволяє одночасно 3 потоки
-
-Потік 1 → входить [████░░] 1/3
-Потік 2 → входить [████░░] 2/3
-Потік 3 → входить [██████] 3/3 (повний!)
-Потік 4 → чекає...  ⏳
-Потік 5 → чекає...  ⏳
-
-Потік 1 → виходить [████░░] 2/3
-Потік 4 → входить  [██████] 3/3
-```
-
-### `SemaphoreSlim`: обмеження паралельних операцій
-
-**`SemaphoreSlim`** — легша версія для роботи **в межах одного процесу**. Підтримує асинхронне очікування (`WaitAsync`).
+Підказує PLINQ, чи варто взагалі паралелізувати запит:
 
 ```csharp
-class ConnectionPoolDemo
-{
-    // Максимум 3 одночасних підключення до бази даних
-    private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(
-        initialCount: 3,    // початкова кількість дозволів
-        maxCount: 3         // максимальна кількість дозволів
+var result = numbers
+    .AsParallel()
+    .WithExecutionMode(ParallelExecutionMode.ForceParallelism) // завжди паралельно
+    // або:
+    .WithExecutionMode(ParallelExecutionMode.Default)          // за рішенням PLINQ
+    .Where(n => n > 100)
+    .ToArray();
+```
+
+`Default` дозволяє PLINQ самостійно вирішити, чи паралелізувати. Для деяких операторів (наприклад, `First()` на відсортованій колекції) PLINQ може обрати послідовне виконання як більш ефективне.
+
+## AsOrdered() — збереження порядку
+
+PLINQ за замовчуванням не зберігає порядок елементів. Для збереження потрібен `AsOrdered()`:
+
+```csharp
+int[] data = Enumerable.Range(1, 20).ToArray();
+
+// Без AsOrdered: порядок результатів непередбачуваний
+var unordered = data
+    .AsParallel()
+    .Select(n => n * n)
+    .ToArray();
+// Може бути: [4, 1, 16, 9, 25, ...]
+
+// З AsOrdered: порядок збережено
+var ordered = data
+    .AsParallel()
+    .AsOrdered()
+    .Select(n => n * n)
+    .ToArray();
+// Завжди: [1, 4, 9, 16, 25, ...]
+```
+
+:::warning Ціна AsOrdered()
+`AsOrdered()` змушує PLINQ синхронізувати результати між потоками, що збільшує накладні витрати. Використовуйте лише коли порядок дійсно важливий. Якщо порядок потрібен лише у кінці — краще додати `OrderBy` після збору результатів.
+:::
+
+## ForAll() — паралельна кінцева дія
+
+`ForAll()` — аналог `foreach`, але виконує дію паралельно, без зайвої синхронізації порядку:
+
+```csharp
+// Звичайний foreach після PLINQ (результати спочатку збираються, потім ітеруються послідовно):
+numbers.AsParallel().Where(IsPrime).ToList().ForEach(SaveToDb);
+
+// ForAll (обробляє результати одразу в паралельних потоках, без буферизації):
+numbers
+    .AsParallel()
+    .Where(IsPrime)
+    .ForAll(n => SaveToDb(n));  // виконується паралельно без зайвих алокацій
+```
+
+:::info ForAll vs foreach
+`ForAll` не повертає значення і не зберігає порядок. Він ідеальний для фінальних side-effect операцій (запис у базу, файл тощо), де порядок не важливий.
+:::
+
+## Aggregate з паралелізацією
+
+Звичайний `Aggregate` не можна паралелізувати — він послідовний за природою. PLINQ надає спеціальне перевантаження з трьома функціями:
+
+```csharp
+int[] numbers = Enumerable.Range(1, 1_000_000).ToArray();
+
+long parallelSum = numbers
+    .AsParallel()
+    .Aggregate(
+        // 1. seed: початкове значення для КОЖНОГО потоку
+        seed: 0L,
+        // 2. updateAccumulator: як кожен потік накопичує своє часткове значення
+        updateAccumulatorFunc: (localSum, n) => localSum + n,
+        // 3. combineAccumulators: як об'єднати часткові результати різних потоків
+        combineAccumulatorsFunc: (total, localSum) => total + localSum,
+        // 4. resultSelector: фінальне перетворення (опційно)
+        resultSelector: total => total
     );
 
-    static async Task Main()
-    {
-        Console.WriteLine("Запуск 8 паралельних запитів...");
-
-        var tasks = Enumerable.Range(1, 8)
-            .Select(id => QueryDatabaseAsync(id));
-
-        await Task.WhenAll(tasks);
-        Console.WriteLine("Всі запити виконано");
-    }
-
-    static async Task QueryDatabaseAsync(int requestId)
-    {
-        Console.WriteLine($"Запит {requestId}: чекає на підключення...");
-
-        await _semaphore.WaitAsync(); // асинхронне очікування (не блокує потік!)
-        try
-        {
-            Console.WriteLine($"Запит {requestId}: отримав підключення, виконує запит...");
-            await Task.Delay(1000); // імітуємо запит до БД
-            Console.WriteLine($"Запит {requestId}: завершено");
-        }
-        finally
-        {
-            _semaphore.Release(); // ОБОВ'ЯЗКОВО звільняємо
-        }
-    }
-}
+Console.WriteLine(parallelSum);  // 500000500000
 ```
 
-### Rate Limiting з SemaphoreSlim
+Аналогічно для складніших агрегацій — наприклад, одночасне знаходження суми і кількості:
 
 ```csharp
-class RateLimiter
-{
-    // Дозволяємо не більше 5 запитів одночасно до зовнішнього API
-    private readonly SemaphoreSlim _throttle = new SemaphoreSlim(5, 5);
+var (sum, count) = numbers
+    .AsParallel()
+    .Aggregate(
+        seed: (Sum: 0L, Count: 0),
+        updateAccumulatorFunc: (acc, n) => (acc.Sum + n, acc.Count + 1),
+        combineAccumulatorsFunc: (a, b) => (a.Sum + b.Sum, a.Count + b.Count),
+        resultSelector: acc => acc
+    );
 
-    public async Task<string> CallExternalApiAsync(string url)
-    {
-        await _throttle.WaitAsync();
-        try
-        {
-            using var client = new HttpClient();
-            return await client.GetStringAsync(url);
-        }
-        finally
-        {
-            _throttle.Release();
-        }
-    }
-}
+double average = (double)sum / count;
+Console.WriteLine($"Середнє: {average}");
 ```
 
-:::tip `WaitAsync()` vs `Wait()`
-У асинхронному коді (`async/await`) завжди використовуйте `_semaphore.WaitAsync()`, а не `_semaphore.Wait()`. Синхронний `Wait()` блокує **потік** (Thread Pool), а `WaitAsync()` лише призупиняє **coroutine**, звільняючи потік для іншої роботи.
+## Коли PLINQ прискорює, а коли сповільнює
+
+### CPU-bound задачі (PLINQ вигідний)
+
+```csharp
+// Перевірка на простоту — важке обчислення
+static bool IsPrime(long n)
+{
+    if (n < 2) return false;
+    for (long i = 2; i <= Math.Sqrt(n); i++)
+        if (n % i == 0) return false;
+    return true;
+}
+
+long[] bigNumbers = Enumerable.Range(1_000_000, 100_000)
+                               .Select(n => (long)n)
+                               .ToArray();
+
+var sw = Stopwatch.StartNew();
+var seqPrimes = bigNumbers.Where(IsPrime).ToArray();
+Console.WriteLine($"LINQ:  {sw.ElapsedMilliseconds} мс, знайдено {seqPrimes.Length}");
+
+sw.Restart();
+var parPrimes = bigNumbers.AsParallel().Where(IsPrime).ToArray();
+Console.WriteLine($"PLINQ: {sw.ElapsedMilliseconds} мс, знайдено {parPrimes.Length}");
+// LINQ:  850 мс
+// PLINQ: 130 мс  (на 8 ядрах)
+```
+
+### IO-bound задачі (PLINQ може нашкодити)
+
+```csharp
+// ПОГАНО: PLINQ для читання файлів — диск є вузьким місцем, не CPU
+var contents = fileNames
+    .AsParallel()                          // не дає переваги — IO обмежений диском
+    .Select(f => File.ReadAllText(f))      // всі потоки чекають диск
+    .ToArray();
+
+// КРАЩЕ: для IO-bound задач використовуйте async/await
+var tasks = fileNames.Select(f => File.ReadAllTextAsync(f));
+var contents2 = await Task.WhenAll(tasks);
+```
+
+:::warning Малі колекції
+PLINQ не варто використовувати для колекцій менше кількох тисяч елементів — overhead розбивки і злиття нівелює будь-яке прискорення.
 :::
 
----
+## Обробка винятків у PLINQ
 
-## ReaderWriterLockSlim: читачі паралельно, письменники ексклюзивно
-
-Уявіть словник, з якого 100 потоків постійно читають і лише 1 раз на хвилину хтось додає новий запис. Якщо використовувати звичайний `lock`, всі читачі вишикуються в чергу, хоча одночасне читання абсолютно безпечне.
-
-**`ReaderWriterLockSlim`** вирішує цю проблему:
-- **Кілька читачів** можуть отримати доступ **одночасно**
-- **Письменник** отримує **ексклюзивний** доступ — всі читачі та інші письменники чекають
-
-```
-Стан: ніхто не працює
- → Читач 1 входить  [R1        ] читання
- → Читач 2 входить  [R1, R2    ] читання (паралельно!)
- → Читач 3 входить  [R1, R2, R3] читання (паралельно!)
- → Письменник чекає ⏳ (поки всі читачі не вийдуть)
- → Читачі виходять
- → Письменник входить [W        ] запис (ексклюзивно)
-```
-
-### Основні методи
+PLINQ збирає всі винятки з усіх потоків і кидає їх як `AggregateException`:
 
 ```csharp
-class CacheWithRWLock
+int[] data = { 1, 0, 2, 0, 3 };
+
+try
 {
-    private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
-    private readonly Dictionary<string, string> _cache = new Dictionary<string, string>();
-
-    // Читання — дозволяємо кільком потокам одночасно
-    public string? Get(string key)
+    var result = data
+        .AsParallel()
+        .Select(n =>
+        {
+            if (n == 0) throw new DivideByZeroException($"Ділення на нуль!");
+            return 100 / n;
+        })
+        .ToArray();
+}
+catch (AggregateException ae)
+{
+    // Handle може обробити кожен вняток окремо
+    ae.Handle(ex =>
     {
-        _rwLock.EnterReadLock();
-        try
+        if (ex is DivideByZeroException dze)
         {
-            _cache.TryGetValue(key, out string? value);
-            return value;
+            Console.WriteLine($"Помилка: {dze.Message}");
+            return true;  // виняток оброблено
         }
-        finally
-        {
-            _rwLock.ExitReadLock();
-        }
-    }
-
-    // Запис — ексклюзивний доступ
-    public void Set(string key, string value)
-    {
-        _rwLock.EnterWriteLock();
-        try
-        {
-            _cache[key] = value;
-        }
-        finally
-        {
-            _rwLock.ExitWriteLock();
-        }
-    }
-
-    // Видалення — також ексклюзивний доступ
-    public bool Remove(string key)
-    {
-        _rwLock.EnterWriteLock();
-        try
-        {
-            return _cache.Remove(key);
-        }
-        finally
-        {
-            _rwLock.ExitWriteLock();
-        }
-    }
-
-    public int Count
-    {
-        get
-        {
-            _rwLock.EnterReadLock();
-            try { return _cache.Count; }
-            finally { _rwLock.ExitReadLock(); }
-        }
-    }
+        return false;     // перекинути далі
+    });
 }
 ```
 
-### UpgradeableReadLock: підвищення рівня доступу
-
-Іноді потрібно спочатку **прочитати** значення, а потім — залежно від результату — **записати**. Для цього є `EnterUpgradeableReadLock`:
-
-```csharp
-class CacheWithUpgrade
-{
-    private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
-    private readonly Dictionary<string, string> _cache = new();
-
-    // GetOrAdd: повертає існуюче або обчислює та зберігає нове значення
-    public string GetOrAdd(string key, Func<string, string> factory)
-    {
-        // Спочатку — читаємо (паралельно з іншими читачами)
-        _rwLock.EnterUpgradeableReadLock();
-        try
-        {
-            if (_cache.TryGetValue(key, out string? existing))
-                return existing; // знайшли — повертаємо без запису
-
-            // Не знайшли — підвищуємо до write lock
-            _rwLock.EnterWriteLock();
-            try
-            {
-                // Перевіряємо ще раз (інший потік міг додати поки ми чекали)
-                if (_cache.TryGetValue(key, out existing))
-                    return existing;
-
-                string newValue = factory(key);
-                _cache[key] = newValue;
-                return newValue;
-            }
-            finally
-            {
-                _rwLock.ExitWriteLock();
-            }
-        }
-        finally
-        {
-            _rwLock.ExitUpgradeableReadLock();
-        }
-    }
-}
-```
-
-:::info Upgradeable vs Read Lock
-Одночасно може бути лише **один** `UpgradeableReadLock`, але поряд із ним можуть працювати звичайні читачі. Це запобігає deadlock: якщо два потоки одночасно спробують підвищитись до WriteLock, лише один отримає його.
+:::info AggregateException.Flatten()
+Якщо AggregateException містить вкладені AggregateException (таке трапляється при вкладених паралельних операціях), метод `Flatten()` розгортає їх в єдиний плоский список.
 :::
 
----
+## Порівняння: LINQ vs PLINQ на великому масиві
 
-## Практичний приклад: кеш з ReaderWriterLockSlim
-
-Реалістичний приклад — простий TTL-кеш (з терміном дії записів):
+Повний приклад для демонстрації різниці у продуктивності:
 
 ```csharp
-using System;
-using System.Collections.Generic;
-using System.Threading;
+using System.Diagnostics;
 
-public class TtlCache<TKey, TValue> : IDisposable
-    where TKey : notnull
+// Генеруємо масив з 5 мільйонів чисел
+double[] data = Enumerable.Range(1, 5_000_000)
+                           .Select(i => (double)i)
+                           .ToArray();
+
+static double HeavyTransform(double x)
 {
-    private record CacheEntry(TValue Value, DateTime ExpiresAt);
-
-    private readonly Dictionary<TKey, CacheEntry> _store = new();
-    private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
-    private readonly TimeSpan _defaultTtl;
-
-    public TtlCache(TimeSpan defaultTtl)
-    {
-        _defaultTtl = defaultTtl;
-    }
-
-    public bool TryGet(TKey key, out TValue? value)
-    {
-        _lock.EnterReadLock();
-        try
-        {
-            if (_store.TryGetValue(key, out var entry) && entry.ExpiresAt > DateTime.UtcNow)
-            {
-                value = entry.Value;
-                return true;
-            }
-            value = default;
-            return false;
-        }
-        finally
-        {
-            _lock.ExitReadLock();
-        }
-    }
-
-    public void Set(TKey key, TValue value, TimeSpan? ttl = null)
-    {
-        var expiresAt = DateTime.UtcNow + (ttl ?? _defaultTtl);
-        _lock.EnterWriteLock();
-        try
-        {
-            _store[key] = new CacheEntry(value, expiresAt);
-        }
-        finally
-        {
-            _lock.ExitWriteLock();
-        }
-    }
-
-    public TValue GetOrCreate(TKey key, Func<TKey, TValue> factory, TimeSpan? ttl = null)
-    {
-        _lock.EnterUpgradeableReadLock();
-        try
-        {
-            if (_store.TryGetValue(key, out var entry) && entry.ExpiresAt > DateTime.UtcNow)
-                return entry.Value;
-
-            _lock.EnterWriteLock();
-            try
-            {
-                // Double-check після отримання WriteLock
-                if (_store.TryGetValue(key, out entry) && entry.ExpiresAt > DateTime.UtcNow)
-                    return entry.Value;
-
-                var value = factory(key);
-                var expiresAt = DateTime.UtcNow + (ttl ?? _defaultTtl);
-                _store[key] = new CacheEntry(value, expiresAt);
-                return value;
-            }
-            finally
-            {
-                _lock.ExitWriteLock();
-            }
-        }
-        finally
-        {
-            _lock.ExitUpgradeableReadLock();
-        }
-    }
-
-    public void Cleanup()
-    {
-        var now = DateTime.UtcNow;
-        _lock.EnterWriteLock();
-        try
-        {
-            var expired = new List<TKey>();
-            foreach (var kvp in _store)
-                if (kvp.Value.ExpiresAt <= now)
-                    expired.Add(kvp.Key);
-
-            foreach (var key in expired)
-                _store.Remove(key);
-        }
-        finally
-        {
-            _lock.ExitWriteLock();
-        }
-    }
-
-    public void Dispose() => _lock.Dispose();
+    // Імітуємо CPU-bound обчислення
+    return Math.Sqrt(Math.Sin(x) * Math.Sin(x) + Math.Cos(x) * Math.Cos(x)) * x;
 }
 
-// Використання
-class Program
-{
-    static void Main()
-    {
-        using var cache = new TtlCache<string, string>(TimeSpan.FromSeconds(30));
+// --- LINQ ---
+var sw = Stopwatch.StartNew();
+var linqResult = data
+    .Where(x => x > 100)
+    .Select(HeavyTransform)
+    .Sum();
+sw.Stop();
+Console.WriteLine($"LINQ:  {sw.ElapsedMilliseconds} мс  →  {linqResult:F2}");
 
-        // Багато читачів паралельно — це ефективно!
-        Parallel.For(0, 20, i =>
-        {
-            var value = cache.GetOrCreate($"key_{i % 5}", k =>
-            {
-                Console.WriteLine($"  Обчислення для {k}...");
-                Thread.Sleep(10);
-                return $"value_{k}";
-            });
-            Console.WriteLine($"Потік {i}: {value}");
-        });
-    }
-}
+// --- PLINQ (без збереження порядку) ---
+sw.Restart();
+var plinqResult = data
+    .AsParallel()
+    .Where(x => x > 100)
+    .Select(HeavyTransform)
+    .Sum();
+sw.Stop();
+Console.WriteLine($"PLINQ: {sw.ElapsedMilliseconds} мс  →  {plinqResult:F2}");
+
+// --- PLINQ (зі збереженням порядку — повільніше) ---
+sw.Restart();
+var plinqOrdered = data
+    .AsParallel()
+    .AsOrdered()
+    .Where(x => x > 100)
+    .Select(HeavyTransform)
+    .Sum();
+sw.Stop();
+Console.WriteLine($"PLINQ AsOrdered: {sw.ElapsedMilliseconds} мс  →  {plinqOrdered:F2}");
+
+// Зразковий результат на 8-ядерному CPU:
+// LINQ:            1240 мс
+// PLINQ:            195 мс  (≈6.4x прискорення)
+// PLINQ AsOrdered:  310 мс  (≈4x прискорення, але з гарантованим порядком)
 ```
 
----
-
-## Порівняльна таблиця примітивів синхронізації
-
-| Примітив | Між процесами | Async підтримка | Кілька доступів | Швидкість | Коли використовувати |
-|---|---|---|---|---|---|
-| `lock` | Ні | Ні | Ні (1) | Найшвидший | Більшість випадків в одному процесі |
-| `Mutex` | **Так** | Ні | Ні (1) | Повільний | Між-процесна синхронізація, один екземпляр програми |
-| `Semaphore` | **Так** | Ні | **Так (N)** | Повільний | Між-процесне обмеження паралелізму |
-| `SemaphoreSlim` | Ні | **Так** | **Так (N)** | Швидкий | Обмеження паралельних async-операцій, rate limiting |
-| `ReaderWriterLockSlim` | Ні | Ні | **Так (читачі)** | Швидкий | Кеш, конфігурація: багато читань, рідкісний запис |
-| `Monitor` | Ні | Ні | Ні (1) | Найшвидший | Producer-consumer, очікування з умовою |
+Результати показують, що PLINQ дає суттєве прискорення для важких CPU-bound операцій. `AsOrdered()` трохи гальмує через накладні витрати синхронізації, але все одно значно швидше за послідовний LINQ.

@@ -1,3 +1,7 @@
+---
+sidebar_position: 5
+---
+
 # Клас System.Console. Форматування консольного виведення
 
 ## Клас System.Console

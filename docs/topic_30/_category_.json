@@ -1,0 +1,10 @@
+{
+  "label": "Тема 30. Основи роботи з базами даних у C#",
+  "position": 30,
+  "link": {
+    "type": "generated-index",
+    "slug": "csharp-database-basics",
+    "title": "Основи роботи з базами даних у C#",
+    "description": "Поняття бази даних та роль СУБД у збереженні інформації. Основи мови SQL: SELECT, INSERT, UPDATE, DELETE. Підключення до БД із використанням ADO.NET. Архітектура ADO.NET: з’єднання (SqlConnection), виконання команд (SqlCommand), зчитування результатів (SqlDataReader). Використання транзакцій. Організація простих CRUD-операцій на прикладі SQL Server або SQLite. Обробка помилок під час роботи з БД."
+  }
+}

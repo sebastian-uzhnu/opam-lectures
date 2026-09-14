@@ -1,10 +1,10 @@
 {
-    "label": "Тема 33. Синхронізація потоків",
-    "position": 33,
-    "link": {
-        "type": "generated-index",
-        "slug": "dotnet-thread-synchronization",
-        "title": "Синхронізація потоків",
-        "description": "Стан гонки (race condition) та способи захисту від нього. Ключове слово lock і клас Monitor. Між-процесна синхронізація через Mutex. Обмеження паралелізму через Semaphore та SemaphoreSlim. Ефективна робота з кешем через ReaderWriterLockSlim. Атомарні операції Interlocked. Потокобезпечні колекції: ConcurrentDictionary, ConcurrentQueue, BlockingCollection."
-    }
+  "label": "Тема 33. Паралельне та асинхронне програмування у .NET",
+  "position": 33,
+  "link": {
+    "type": "generated-index",
+    "slug": "parallel-async-programming",
+    "title": "Паралельне та асинхронне програмування у .NET",
+    "description": "Використання бібліотеки Task Parallel Library (TPL). Поняття задачі (Task), її створення та запуск. Методи Wait, WhenAll, WhenAny. Використання паралельних циклів Parallel.For, Parallel.ForEach. Розподіл обчислювальних завдань між ядрами процесора. Поняття асинхронності як альтернативи блокуванню потоків. Ключові слова async та await. Виконання операцій введення-виведення без блокування головного потоку. Обробка помилок у асинхронних методах. Відмінності між багатопотоковістю та асинхронністю."
+  }
 }
