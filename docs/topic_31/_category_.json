@@ -1,0 +1,10 @@
+{
+  "label": "Тема 31. Entity Framework та ORM",
+  "position": 31,
+  "link": {
+    "type": "generated-index",
+    "slug": "entity-framework-core-orm",
+    "title": "Entity Framework та ORM",
+    "description": "Проблема «об’єктно-реляційного відображення» у програмуванні. Entity Framework як сучасний інструмент для роботи з БД. Підходи Code First та Database First. Побудова моделей і контексту даних. Використання LINQ to Entities для запитів. Трекінг змін і збереження даних. Використання міграцій для управління схемою БД. Практичні приклади: проста інформаційна система з графічним інтерфейсом."
+  }
+}

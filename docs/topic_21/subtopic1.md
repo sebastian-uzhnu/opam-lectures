@@ -2,265 +2,39 @@
 sidebar_position: 2
 ---
 
-# Анімація ходьби: клас SpriteAnimator
+# Розробка у Visual Studio та дизайн інтерфейсів
 
-## Архітектура спрайтової анімації
+## Розробка додатків Windows Forms у Visual Studio
 
-Розіб'ємо задачу на частини:
+Microsoft Visual Studio надає надзвичайно потужні та зручні інструменти для розробки застосунків Windows Forms. Основний акцент робиться на візуальному проектуванні інтерфейсу та автоматизації написання рутинного коду.
 
-```
-BitmapImage (аркуш)
-    └── SpriteAnimator          ← знає про кадри і час
-            ├── currentFrame    ← який кадр зараз
-            ├── DispatcherTimer ← рахує час між кадрами
-            └── Image (WPF)     ← куди виводить CroppedBitmap
-```
+### Основні вікна середовища розробки:
 
-## Опис спрайт-аркуша
+1. **Windows Forms Designer (Конструктор форм):** Це візуальна область, де ви бачите вашу форму так, як вона буде виглядати під час виконання програми. Тут ви розміщуєте та налаштовуєте елементи керування.
+2. **Toolbox (Панель елементів):** Містить усі доступні елементи керування (Controls) — кнопки (Button), мітки (Label), текстові поля (TextBox) тощо. Елементи перетягуються з Toolbox на поверхню форми.
+3. **Properties Window (Вікно властивостей):** Дозволяє переглядати та змінювати властивості (колір, розмір, шрифт) і події (натискання, наведення) виділеного об'єкта чи самої форми.
+4. **Solution Explorer (Провідник рішень):** Відображає структуру вашого проекту, включаючи файли коду, форми, ресурси та підключені бібліотеки.
 
-Перш ніж писати код, потрібно описати структуру нашого аркуша. Типовий RPG-персонаж має 4 напрямки ходьби по 3–4 кадри кожен:
+### Процес створення інтерфейсу:
 
-```
-hero_spritesheet.png (192×256 px, кадри 48×64)
+- Розробник вибирає елемент у **Toolbox** і додає його на форму.
+- За допомогою миші елемент переміщується у потрібне місце, змінюються його розміри.
+- У **Properties Window** налаштовуються візуальні та функціональні характеристики елемента.
+- Подвійне клацання по елементу на формі автоматично генерує обробник події за замовчуванням (наприклад, подію `Click` для кнопки) і перемикає редактор у режим написання коду.
 
-Ряд 0 (y=0):   [вниз_0] [вниз_1] [вниз_2]    ← ходьба вниз
-Ряд 1 (y=64):  [вліво_0][вліво_1][вліво_2]   ← ходьба вліво
-Ряд 2 (y=128): [вправо_0][вправо_1][вправо_2] ← ходьба вправо
-Ряд 3 (y=192): [вгору_0][вгору_1][вгору_2]   ← ходьба вгору
-```
+Автоматично згенерований код ініціалізації елементів розміщується у методі `InitializeComponent()`, що знаходиться у файлі `.Designer.cs`. **Не рекомендується редагувати цей файл вручну**, оскільки дизайнер Visual Studio може затерти ваші зміни при наступному візуальному редагуванні форми.
 
-```csharp
-public enum Direction { Down = 0, Left = 1, Right = 2, Up = 3 }
-```
+## Стандарти та сучасні тенденції створення візуальних інтерфейсів
 
-## Клас SpriteSheet
+Незважаючи на те, що технологія Windows Forms є класичною і не підтримує сучасні парадигми на кшталт декларативного розмітки (як XAML у WPF/MAUI) чи апаратного прискорення відмальовки такою ж мірою, як сучасні фреймворки, при створенні інтерфейсів все одно слід дотримуватися загальноприйнятих стандартів UX/UI.
 
-```csharp
-public class SpriteSheet
-{
-    public BitmapImage Bitmap     { get; }
-    public int         FrameWidth { get; }
-    public int         FrameHeight{ get; }
-    public int         Columns    { get; }
-    public int         Rows       { get; }
+### Основні принципи:
 
-    public SpriteSheet(string resourcePath, int frameWidth, int frameHeight)
-    {
-        Bitmap      = new BitmapImage(new Uri(resourcePath));
-        FrameWidth  = frameWidth;
-        FrameHeight = frameHeight;
-        Columns     = (int)(Bitmap.PixelWidth  / frameWidth);
-        Rows        = (int)(Bitmap.PixelHeight / frameHeight);
-    }
+1. **Інтуїтивна зрозумілість:** Інтерфейс має бути передбачуваним. Стандартні дії (наприклад, закриття вікна, збереження файлу) повинні виконуватися за допомогою звичних комбінацій клавіш (Ctrl+S) та стандартних іконок.
+2. **Узгодженість (Консистентність):** Використання однакових шрифтів, кольорів, відступів та розмірів елементів на всіх формах додатку.
+3. **Вирівнювання та групування:** Елементи повинні бути акуратно вирівняні (Visual Studio надає напрямні лінії — snaplines — для допомоги в цьому). Логічно пов'язані елементи варто об'єднувати у групи за допомогою елементів `GroupBox` або `Panel`.
+4. **Мінімалізм:** Не варто перевантажувати екран зайвою інформацією та великою кількістю дрібних елементів. Меню, панелі інструментів та вкладки (TabControl) допомагають структурувати складні інтерфейси.
+5. **Адаптивність (Responsive Design):** Незважаючи на обмеження WinForms, вікна повинні коректно змінювати свій вміст при зміні розміру вікна користувачем. Для цього активно використовуються властивості `Anchor` (прив'язка до країв) та `Dock` (заповнення області), а також контейнери компонування, такі як `TableLayoutPanel` та `FlowLayoutPanel`.
+6. **Доступність (Accessibility):** Додаток повинен бути зручним для людей з обмеженими можливостями (підтримка навігації з клавіатури, висока контрастність, використання правильних властивостей `AccessibleName` та `AccessibleRole` для скрінрідерів).
 
-    /// <summary>
-    /// Повертає CroppedBitmap для кадру (col, row)
-    /// </summary>
-    public CroppedBitmap GetFrame(int col, int row)
-    {
-        return new CroppedBitmap(Bitmap,
-            new Int32Rect(col * FrameWidth, row * FrameHeight,
-                          FrameWidth, FrameHeight));
-    }
-}
-```
-
-## Клас SpriteAnimator
-
-```csharp
-public class SpriteAnimator
-{
-    private readonly SpriteSheet    _sheet;
-    private readonly Image          _target;   // WPF Image для виводу
-    private readonly DispatcherTimer _timer;
-
-    private int _currentCol;   // поточний кадр у ряду
-    private int _currentRow;   // поточний ряд (напрямок)
-    private int _frameCount;   // кількість кадрів в анімації
-
-    public bool IsAnimating => _timer.IsEnabled;
-
-    public SpriteAnimator(SpriteSheet sheet, Image target, int fps = 8)
-    {
-        _sheet  = sheet;
-        _target = target;
-
-        _timer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(1000.0 / fps)
-        };
-        _timer.Tick += OnTick;
-    }
-
-    /// <summary>
-    /// Запускає анімацію: row — ряд аркуша, frameCount — кількість кадрів у ряду
-    /// </summary>
-    public void Play(int row, int frameCount)
-    {
-        if (_currentRow == row && _timer.IsEnabled)
-            return; // вже грає цей самий ряд
-
-        _currentRow   = row;
-        _frameCount   = frameCount;
-        _currentCol   = 0;
-        _timer.Start();
-        ShowCurrentFrame();
-    }
-
-    /// <summary>
-    /// Зупиняє анімацію та показує стоп-кадр (перший кадр ряду)
-    /// </summary>
-    public void Stop()
-    {
-        _timer.Stop();
-        _currentCol = 0;
-        ShowCurrentFrame();
-    }
-
-    private void OnTick(object sender, EventArgs e)
-    {
-        _currentCol = (_currentCol + 1) % _frameCount;
-        ShowCurrentFrame();
-    }
-
-    private void ShowCurrentFrame()
-    {
-        _target.Source = _sheet.GetFrame(_currentCol, _currentRow);
-    }
-}
-```
-
-## Використання у MainWindow
-
-**XAML:**
-```xml
-<Canvas x:Name="GameCanvas" Background="#1a1a2e"
-        Focusable="True"
-        KeyDown="OnKeyDown"
-        KeyUp="OnKeyUp">
-
-    <!-- Персонаж -->
-    <Image x:Name="HeroImage"
-           Width="48" Height="64"
-           Canvas.Left="200" Canvas.Top="200"
-           RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-</Canvas>
-```
-
-:::tip NearestNeighbor
-`RenderOptions.BitmapScalingMode="NearestNeighbor"` вимикає розмиття при масштабуванні піксельних (pixel art) зображень. Без нього WPF застосовує білінійну фільтрацію і кадри виглядають нечітко.
-:::
-
-**C#:**
-```csharp
-public partial class MainWindow : Window
-{
-    private SpriteSheet    _sheet;
-    private SpriteAnimator _animator;
-
-    // Позиція персонажа
-    private double _heroX = 200, _heroY = 200;
-    private const double Speed = 3; // пікселів за кадр
-
-    // Стан клавіш (яка зараз натиснута)
-    private readonly HashSet<Key> _pressedKeys = new();
-
-    // Ігровий таймер (оновлення позиції)
-    private DispatcherTimer _gameTimer;
-
-    public MainWindow()
-    {
-        InitializeComponent();
-        Loaded += OnLoaded;
-    }
-
-    private void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        // Завантажуємо спрайт-аркуш
-        // "pack://application:,,,/Assets/hero.png" — шлях до ресурсу
-        _sheet    = new SpriteSheet("pack://application:,,,/Assets/hero.png",
-                                     frameWidth: 48, frameHeight: 64);
-        _animator = new SpriteAnimator(_sheet, HeroImage, fps: 8);
-
-        // Показуємо стоп-кадр (вниз, кадр 0)
-        _animator.Play(row: (int)Direction.Down, frameCount: 3);
-        _animator.Stop();
-
-        // Ігровий цикл
-        _gameTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS
-        };
-        _gameTimer.Tick += OnGameTick;
-        _gameTimer.Start();
-
-        // Фокус на Canvas для отримання клавіатурних подій
-        GameCanvas.Focus();
-    }
-
-    private void OnGameTick(object sender, EventArgs e)
-    {
-        bool moving = false;
-
-        if (_pressedKeys.Contains(Key.Left) || _pressedKeys.Contains(Key.A))
-        {
-            _heroX -= Speed;
-            _animator.Play((int)Direction.Left, frameCount: 3);
-            moving = true;
-        }
-        else if (_pressedKeys.Contains(Key.Right) || _pressedKeys.Contains(Key.D))
-        {
-            _heroX += Speed;
-            _animator.Play((int)Direction.Right, frameCount: 3);
-            moving = true;
-        }
-        else if (_pressedKeys.Contains(Key.Up) || _pressedKeys.Contains(Key.W))
-        {
-            _heroY -= Speed;
-            _animator.Play((int)Direction.Up, frameCount: 3);
-            moving = true;
-        }
-        else if (_pressedKeys.Contains(Key.Down) || _pressedKeys.Contains(Key.S))
-        {
-            _heroY += Speed;
-            _animator.Play((int)Direction.Down, frameCount: 3);
-            moving = true;
-        }
-
-        if (!moving)
-            _animator.Stop();
-
-        // Обмежуємо межами Canvas
-        _heroX = Math.Clamp(_heroX, 0, GameCanvas.ActualWidth  - _sheet.FrameWidth);
-        _heroY = Math.Clamp(_heroY, 0, GameCanvas.ActualHeight - _sheet.FrameHeight);
-
-        // Оновлюємо позицію Image на Canvas
-        Canvas.SetLeft(HeroImage, _heroX);
-        Canvas.SetTop (HeroImage, _heroY);
-    }
-
-    private void OnKeyDown(object sender, KeyEventArgs e) => _pressedKeys.Add(e.Key);
-    private void OnKeyUp  (object sender, KeyEventArgs e) => _pressedKeys.Remove(e.Key);
-}
-```
-
-## Чому HashSet для клавіш
-
-У Windows натискання клавіші генерує події `KeyDown` з авто-повтором. Якщо використовувати просту змінну `bool isMoving`, рух буде переривчастим. `HashSet<Key>` дозволяє:
-
-1. Тримати кілька кнопок одночасно (діагональний рух)
-2. Уникати авто-повторних спрацювань
-3. Перевіряти стан клавіш у ігровому циклі, а не в обробнику подій
-
-```csharp
-// Перевірка кількох кнопок одночасно (діагональний рух)
-bool goLeft  = _pressedKeys.Contains(Key.Left) || _pressedKeys.Contains(Key.A);
-bool goRight = _pressedKeys.Contains(Key.Right) || _pressedKeys.Contains(Key.D);
-bool goUp    = _pressedKeys.Contains(Key.Up)   || _pressedKeys.Contains(Key.W);
-bool goDown  = _pressedKeys.Contains(Key.Down) || _pressedKeys.Contains(Key.S);
-
-if (goLeft)  { _heroX -= Speed; direction = Direction.Left; }
-if (goRight) { _heroX += Speed; direction = Direction.Right; }
-if (goUp)    { _heroY -= Speed; direction = Direction.Up; }
-if (goDown)  { _heroY += Speed; direction = Direction.Down; }
-```
+Хоча WinForms має класичний дизайн, існують бібліотеки сторонніх розробників (наприклад, DevExpress, Telerik, або відкриті бібліотеки для Material Design), які дозволяють стилізувати WinForms-застосунки під сучасні тренди графічного дизайну.

@@ -1,161 +1,695 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 ---
 
-# Операції з рядками
+# Викидання винятків та валідація введення
 
-## Незмінність рядків (Immutability)
+## Дві сторони одного механізму
 
-Важливо пам'ятати, що рядки в C# є **незмінними** (immutable). Це означає, що після створення об'єкта рядка його не
-можна змінити. Будь-яка операція, яка "змінює" рядок, насправді створює новий об'єкт рядка в пам'яті.
+Досі ми були в ролі того, хто **ловить**. Але хтось же ці винятки **кидає** —
+і це не завжди .NET. Дуже часто це маєте бути ви.
 
-```csharp
-string s1 = "Hello";
-string s2 = s1; 
-s1 += " World"; // Створюється новий рядок "Hello World", s1 посилається на нього
-// s2 все ще посилається на старий рядок "Hello"
-```
-
-## Довжина рядка
-
-Властивість `Length` повертає кількість символів у рядку:
+Уявіть метод, який рахує середнє арифметичне масиву:
 
 ```csharp
-string text = "C# Programming";
-int length = text.Length; // 14
-```
-
-## Доступ до символів
-
-До окремих символів рядка можна звертатися за індексом (як у масиві), але тільки для читання:
-
-```csharp
-string text = "Hello";
-char first = text[0]; // 'H'
-char last = text[text.Length - 1]; // 'o'
-
-// text[0] = 'h'; // Помилка компіляції! Рядки незмінні.
-```
-
-## Перебір символів
-
-Можна використовувати цикл `foreach` для перебору всіх символів рядка:
-
-```csharp
-string text = "Hello";
-foreach (char c in text)
+double Average(int[] numbers)
 {
-    Console.WriteLine(c);
+    int sum = 0;
+    foreach (int n in numbers) sum += n;
+    return (double)sum / numbers.Length;
 }
 ```
 
-## Конкатенація (Об'єднання)
+Що станеться, якщо передати порожній масив? `sum` буде 0, `Length` буде 0,
+і ми отримаємо `0.0 / 0` — тобто `NaN`. Програма не впаде, просто у звіті
+з'явиться «Середній бал: NaN». Це та сама логічна помилка, про яку ми говорили:
+тиха і найгірша.
 
-Об'єднання рядків можна виконувати оператором `+` або методом `String.Concat`:
-
-```csharp
-string s1 = "Hello";
-string s2 = "World";
-string res1 = s1 + " " + s2;
-string res2 = String.Concat(s1, " ", s2);
-```
-
-## Порівняння рядків
-
-Для порівняння рядків не завжди достатньо `==`. Метод `Compare` та `Equals` дають більше контролю (наприклад,
-ігнорування регістру).
+Правильна поведінка — сказати вголос, що так робити не можна:
 
 ```csharp
-string a = "apple";
-string b = "Apple";
+double Average(int[] numbers)
+{
+    if (numbers.Length == 0)
+    {
+        throw new ArgumentException("Масив не може бути порожнім", nameof(numbers));
+    }
 
-bool isEqual = (a == b); // false
-bool isSame = a.Equals(b, StringComparison.OrdinalIgnoreCase); // true
-
-int result = String.Compare(a, b); // повертає < 0, 0 або > 0
+    int sum = 0;
+    foreach (int n in numbers) sum += n;
+    return (double)sum / numbers.Length;
+}
 ```
 
-## Пошук у рядку
+Тепер той, хто викликав метод неправильно, дізнається про це одразу
+і з точною адресою помилки.
 
-* `Contains(str)`: чи містить підрядок
-* `StartsWith(str)` / `EndsWith(str)`: чи починається/закінчується на підрядок
-* `IndexOf(str)`: індекс першого входження (або -1)
-* `LastIndexOf(str)`: індекс останнього входження
+## Синтаксис throw
 
 ```csharp
-string text = "Hello World";
-bool hasWorld = text.Contains("World"); // true
-int index = text.IndexOf("o"); // 4
+throw new ТипВинятку("Повідомлення для людини");
 ```
 
-## Виділення підрядків (Substring)
+Оператор `throw` створює виняток і запускає розкручування стека — все те,
+що ми розібрали в першому підрозділі. Виконання методу обривається негайно.
 
-Метод `Substring` дозволяє отримати частину рядка:
+Найуживаніші винятки, які кидають руками:
+
+| Виняток | Коли кидати | Приклад повідомлення |
+| --- | --- | --- |
+| `ArgumentException` | аргумент неправильний за змістом | «Масив не може бути порожнім» |
+| `ArgumentNullException` | аргумент дорівнює `null`, а не має | «Ім'я не задано» |
+| `ArgumentOutOfRangeException` | аргумент поза допустимим діапазоном | «Вік має бути від 0 до 130» |
+| `InvalidOperationException` | об'єкт не в тому стані для цієї дії | «Не можна зняти гроші з закритого рахунку» |
+| `NotSupportedException` | операція принципово не підтримується | «Цей формат файлу не підтримується» |
+| `FormatException` | рядок не того формату | «Очікувався формат ДД.ММ.РРРР» |
+
+Другий аргумент `ArgumentException` — ім'я параметра. Пишіть його через
+`nameof`, а не рядком:
 
 ```csharp
-string text = "Hello World";
-// Substring(startIndex, length)
-string sub = text.Substring(6, 5); // "World"
-// Substring(startIndex) - до кінця рядка
-string tail = text.Substring(6); // "World"
+throw new ArgumentException("Масив не може бути порожнім", nameof(numbers));
 ```
 
-## Розділення та об'єднання (Split та Join)
+`nameof(numbers)` перетворюється компілятором на рядок `"numbers"`. Перевага
+в тому, що коли ви перейменуєте параметр, `nameof` оновиться автоматично,
+а звичайний рядок мовчки стане брехнею.
 
-`Split` розбиває рядок на масив за роздільником, а `Join` об'єднує масив у рядок.
+**Вивід** при виклику `Average([])`:
+
+```
+Unhandled exception. System.ArgumentException: Масив не може бути порожнім (Parameter 'numbers')
+   at Program.<<Main>$>g__Average|0_0(Int32[] numbers) in C:\Demo\Program.cs:line 5
+```
+
+Зверніть увагу: `(Parameter 'numbers')` .NET дописав сам.
+
+### Охоронні перевірки .NET 8
+
+Перевірки аргументів пишуть так часто, що у .NET 8 для них є готові
+статичні методи. Вони коротші й генерують правильні повідомлення самі.
 
 ```csharp
-string sentence = "C#,Java,Python,C++";
-string[] langs = sentence.Split(','); 
-// langs = ["C#", "Java", "Python", "C++"]
+void RegisterStudent(string name, int age, int[] grades)
+{
+    ArgumentException.ThrowIfNullOrWhiteSpace(name);       // порожнє ім'я
+    ArgumentNullException.ThrowIfNull(grades);             // null-масив
+    ArgumentOutOfRangeException.ThrowIfNegative(age);      // від'ємний вік
+    ArgumentOutOfRangeException.ThrowIfGreaterThan(age, 130);
 
-string newSentence = String.Join(" | ", langs);
-// "C# | Java | Python | C++"
+    Console.WriteLine($"Зареєстровано: {name}, {age} років, оцінок: {grades.Length}");
+}
+
+RegisterStudent("Олена", 17, [10, 11, 12]);   // ОК
+RegisterStudent("   ", 17, []);               // ArgumentException
 ```
 
-## Заміна та видалення (Replace, Remove, Trim)
+**Вивід:**
+
+```
+Зареєстровано: Олена, 17 років, оцінок: 3
+Unhandled exception. System.ArgumentException: The value cannot be an empty string
+or composed entirely of whitespace. (Parameter 'name')
+```
+
+Ім'я параметра `name` .NET визначив сам — без жодного `nameof`.
+
+| Метод | Що перевіряє |
+| --- | --- |
+| `ArgumentNullException.ThrowIfNull(x)` | `x` не `null` |
+| `ArgumentException.ThrowIfNullOrEmpty(s)` | рядок не `null` і не порожній |
+| `ArgumentException.ThrowIfNullOrWhiteSpace(s)` | ще й не самі пробіли |
+| `ArgumentOutOfRangeException.ThrowIfNegative(n)` | `n` не від'ємне |
+| `ArgumentOutOfRangeException.ThrowIfNegativeOrZero(n)` | `n` більше нуля |
+| `ArgumentOutOfRangeException.ThrowIfZero(n)` | `n` не нуль |
+| `ArgumentOutOfRangeException.ThrowIfLessThan(n, min)` | `n` не менше `min` |
+| `ArgumentOutOfRangeException.ThrowIfGreaterThan(n, max)` | `n` не більше `max` |
+
+:::tip Порада
+Такі перевірки ставлять **на самому початку методу**, до будь-якої роботи.
+Їх називають **охоронними умовами** (англ. *guard clauses*): метод спочатку
+відбиває все погане, а потім спокійно робить свою справу, знаючи, що дані
+нормальні.
+:::
+
+## Коли кидати виняток самому
+
+Найпоширеніша помилка новачка — почати кидати винятки всюди. Орієнтир простий:
+
+**Кидайте виняток, коли метод отримав те, з чим він принципово не може
+працювати, і сам не має права вирішувати, що з цим робити.**
+
+Кидати варто:
+
+- аргумент порушує контракт методу (порожній масив, від'ємний вік, `null`);
+- об'єкт у стані, коли операція безглузда («зняти гроші з порожнього рахунку»);
+- дані з файлу або мережі не відповідають очікуваному формату;
+- сталося щось, після чого продовжувати небезпечно (можна зіпсувати дані).
+
+Кидати **не** варто:
+
+- користувач ввів дурницю з клавіатури — це нормальна ситуація, перепитайте;
+- значення просто не знайшлося у списку — поверніть `-1` або `false`;
+- щоб вийти з циклу або з методу — для цього є `break` і `return`;
+- у методі, який сам же поруч цей виняток і ловить.
+
+:::warning Обережно
+Виняток кидають **бібліотечні** методи — ті, які не знають, хто їх викликає.
+Метод `Average` не має права виводити щось у консоль: раптом його викликають
+з веб-сервера чи з мобільного застосунку. Тому він кидає виняток, а рішення
+«що сказати людині» приймає той, хто його викликав. Це і є розділення
+відповідальності.
+:::
+
+## Ієрархія винятків
+
+Усі винятки у .NET — нащадки класу `System.Exception`. Саме тому
+`catch (Exception)` ловить усе.
+
+```
+System.Object
+    │
+    └── System.Exception                       базовий для ВСІХ винятків
+            │
+            ├── SystemException                винятки середовища виконання
+            │       │
+            │       ├── ArithmeticException
+            │       │       ├── DivideByZeroException
+            │       │       ├── OverflowException
+            │       │       └── NotFiniteNumberException
+            │       │
+            │       ├── ArgumentException
+            │       │       ├── ArgumentNullException
+            │       │       └── ArgumentOutOfRangeException
+            │       │
+            │       ├── NullReferenceException
+            │       ├── IndexOutOfRangeException
+            │       ├── InvalidOperationException
+            │       │       └── ObjectDisposedException
+            │       ├── InvalidCastException
+            │       ├── FormatException
+            │       ├── NotSupportedException
+            │       │       └── NotImplementedException
+            │       │
+            │       └── IOException                    (System.IO)
+            │               ├── FileNotFoundException
+            │               ├── DirectoryNotFoundException
+            │               ├── PathTooLongException
+            │               └── EndOfStreamException
+            │
+            ├── KeyNotFoundException           (System.Collections.Generic)
+            ├── TaskCanceledException
+            ├── HttpRequestException
+            │
+            └── ВашВласнийВиняток              ← сюди дописуються ваші класи
+```
+
+З цього дерева випливають дуже практичні речі:
 
 ```csharp
-string text = "  Hello World  ";
-
-// Видалення пробілів на початку і в кінці
-string trimmed = text.Trim(); // "Hello World"
-
-// Заміна
-string replaced = text.Replace("World", "C#"); // "  Hello C#  "
-
-// Видалення частини рядка (startIndex, count)
-string removed = text.Remove(5); // "  Hel" (видаляє все починаючи з 5-го індексу)
+try
+{
+    // ...
+}
+catch (ArgumentNullException) { /* тільки null-аргумент */ }
+catch (ArgumentException)     { /* будь-який інший поганий аргумент,
+                                  включно з ArgumentOutOfRangeException */ }
+catch (Exception)             { /* геть усе інше */ }
 ```
 
-## Перевірка на наявність підрядка
+`ArgumentOutOfRangeException` — нащадок `ArgumentException`, тому другий блок
+спіймає і його. А от навпаки не працює: `catch (ArgumentOutOfRangeException)`
+не спіймає простий `ArgumentException`.
 
-Метод `Contains()` перевіряє, чи містить рядок певний підрядок.
+Так само `catch (IOException)` ловить і `FileNotFoundException`, і
+`DirectoryNotFoundException` — зручно, коли реакція на всі файлові проблеми
+однакова.
+
+:::info Цікаво
+Історично винятки .NET ділилися на `SystemException` (від середовища)
+і `ApplicationException` (від застосунку) — і в старих книжках досі радять
+успадковувати власні винятки від `ApplicationException`. **Так більше не
+роблять.** Розділення виявилось безглуздим: ніхто не писав
+`catch (ApplicationException)`. Офіційна рекомендація Microsoft сьогодні —
+успадковувати прямо від `Exception`.
+:::
+
+## Власний клас винятку (забігаємо наперед)
+
+Іноді стандартних винятків не вистачає. Тоді створюють свій — щоб той, хто
+викликає, міг спіймати саме цю ситуацію окремо.
+
+Класи ми ще не проходили (це наступна велика тема), тому просто подивіться,
+як це виглядає, і не намагайтесь поки що зрозуміти кожне слово:
 
 ```csharp
-string sentence = "The quick brown fox";
-bool containsFox = sentence.Contains("fox");  // true
+// Це вже ООП. Ключове слово : Exception означає «мій виняток —
+// це різновид Exception, з усіма його властивостями».
+class InsufficientFundsException : Exception
+{
+    public decimal Requested { get; }
+    public decimal Available { get; }
+
+    public InsufficientFundsException(decimal requested, decimal available)
+        : base($"Потрібно {requested:C}, доступно лише {available:C}")
+    {
+        Requested = requested;
+        Available = available;
+    }
+}
 ```
 
-## Перевірка на порожність
-
-Методи `IsNullOrEmpty()` та `IsNullOrWhiteSpace()` допомагають визначити, чи є рядок порожнім або складається лише з
-пробілів.
+Використання виглядає точно так само, як зі стандартними винятками:
 
 ```csharp
-string empty = "";
-bool isEmpty = string.IsNullOrEmpty(empty);  // true
+decimal balance = 500m;
+decimal withdrawal = 800m;
 
-string whiteSpace = "   ";
-bool isOnlyWhiteSpace = string.IsNullOrWhiteSpace(whiteSpace);  // true
+try
+{
+    if (withdrawal > balance)
+    {
+        throw new InsufficientFundsException(withdrawal, balance);
+    }
+    balance -= withdrawal;
+}
+catch (InsufficientFundsException ex)
+{
+    Console.WriteLine(ex.Message);
+    Console.WriteLine($"Не вистачає: {ex.Requested - ex.Available:C}");
+}
 ```
 
-## Форматування рядків
+**Вивід:**
 
-Метод `String.Format()` дозволяє динамічно створювати рядки на основі шаблону.
+```
+Потрібно 800,00 ₴, доступно лише 500,00 ₴
+Не вистачає: 300,00 ₴
+```
+
+Головна перевага власного винятку — не текст повідомлення, а **додаткові
+властивості**: `Requested` і `Available`. Той, хто ловить, отримує не рядок,
+а структуровані дані, з якими можна щось зробити.
+
+:::note
+Правила пристойності для власних винятків:
+
+- назва **обов'язково** закінчується словом `Exception`;
+- успадковувати від `Exception`, а не від `ApplicationException`;
+- створювати свій клас лише тоді, коли той, хто ловить, справді реагуватиме
+  на нього окремо. Якщо реакція буде така сама, як на `ArgumentException` —
+  беріть `ArgumentException`.
+
+Повернемось до цього після теми про класи та наслідування.
+:::
+
+## Головне: валідація введення користувача
+
+А тепер найпрактичніша частина всієї теми.
+
+Дані з клавіатури — найненадійніше джерело у програмі. Користувач введе
+порожній рядок, слово замість числа, число з комою замість крапки, пробіли
+з обох боків, від'ємний вік, тисячу років і взагалі все, що ви не передбачили.
+Це не зловмисність — це нормальна поведінка людей.
+
+**Валідація** — це перевірка даних на відповідність очікуванням **до** того,
+як ви почнете з ними працювати.
+
+### Parse проти TryParse
+
+Є два способи перетворити рядок на число, і вони поводяться принципово
+по-різному.
 
 ```csharp
-int value = 1234;
-string formatted = string.Format("Value is {0:N0}", value);  // "Value is 1,234"
+// Спосіб 1: Parse — «дай мені число або зламайся»
+int age = int.Parse("двадцять");     // FormatException, програма падає
+
+// Спосіб 2: TryParse — «спробуй; скажи, чи вийшло»
+bool ok = int.TryParse("двадцять", out int age2);
+Console.WriteLine($"Вийшло: {ok}, значення: {age2}");
 ```
 
+**Вивід другого рядка:**
+
+```
+Вийшло: False, значення: 0
+```
+
+`TryParse` **ніколи не кидає винятку**. Він повертає `bool` — вийшло чи ні —
+а саме число «віддає» через параметр із ключовим словом `out`.
+
+Запис `out int age2` означає «оголоси тут змінну `age2` і дай методу
+можливість покласти в неї результат». Це скорочення, доступне з C# 7;
+раніше змінну треба було оголошувати окремим рядком.
+
+Ідеальний шаблон використання — прямо в умові `if`:
+
+```csharp
+Console.Write("Введіть вік: ");
+string input = Console.ReadLine() ?? "";
+
+if (int.TryParse(input, out int age))
+{
+    Console.WriteLine($"Через 10 років вам буде {age + 10}");
+}
+else
+{
+    Console.WriteLine("Це не схоже на число.");
+}
+```
+
+Змінна `age` доступна в обох гілках, але має сенс лише в першій.
+
+| Критерій | `Parse` | `TryParse` |
+| --- | --- | --- |
+| Що робить при поганих даних | кидає `FormatException` | повертає `false` |
+| Що повертає | саме число | `bool`, число через `out` |
+| Потрібен `try/catch` | так | ні |
+| Швидкість на поганих даних | повільно (виняток) | швидко |
+| Читабельність коду | 4 рядки з `try/catch` | 1 рядок з `if` |
+| Коли доречно | дані **гарантовано** правильні (константа в коді, вже перевірений рядок) | будь-які зовнішні дані: клавіатура, файл, мережа |
+
+:::tip Порада
+Практичне правило: **якщо рядок прийшов ззовні — тільки `TryParse`.**
+`Parse` лишається для випадків на кшталт `int.Parse("42")` у тесті,
+де ви самі написали цей рядок і знаєте, що він коректний.
+:::
+
+Сімейство `TryParse` є майже у всіх типів:
+
+```csharp
+int.TryParse("42", out int i);
+double.TryParse("3.14", out double d);
+decimal.TryParse("199.99", out decimal m);
+bool.TryParse("true", out bool b);
+DateTime.TryParse("13.09.2026", out DateTime dt);
+TimeSpan.TryParse("01:30", out TimeSpan ts);
+char.TryParse("A", out char c);
+```
+
+### Пастка з дробовими числами
+
+Ось код, який працює у Вінниці і ламається у Лондоні:
+
+```csharp
+double.TryParse("3.14", out double x);
+Console.WriteLine($"Результат: {x}");
+```
+
+**Вивід** на комп'ютері з українською локаллю:
+
+```
+Результат: 0
+```
+
+Не вийшло! Бо в українській (і в більшості європейських) локалей десятковий
+розділювач — **кома**, а не крапка. Рядок `"3.14"` система читає як щось
+незрозуміле.
+
+Три варіанти вирішення:
+
+```csharp
+using System.Globalization;
+
+// 1. Дані від користувача — хай вводить як звик (з комою)
+double.TryParse("3,14", out double a);                       // працює в укр. локалі
+
+// 2. Дані з файлу/мережі — фіксована культура з крапкою
+double.TryParse("3.14", NumberStyles.Float,
+                CultureInfo.InvariantCulture, out double b);  // працює завжди
+
+// 3. Приймати обидва варіанти — просто замінити кому на крапку
+string raw = Console.ReadLine() ?? "";
+string normalized = raw.Replace(',', '.');
+double.TryParse(normalized, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out double c);
+```
+
+**`CultureInfo.InvariantCulture`** — це «нейтральна культура»: крапка як
+десятковий розділювач, без пробілів у розрядах. Її використовують для даних,
+які читатиме програма, а не людина: файли, CSV, JSON, мережеві запити.
+
+:::danger Часта помилка
+Найпідступніше тут те, що на вашому комп'ютері може працювати, а у викладача
+чи на сервері — ні. Локаль — це налаштування операційної системи. Коли дані
+пишуться у файл, **завжди** використовуйте `InvariantCulture` і при записі,
+і при читанні. Детальніше — у темі про файли.
+:::
+
+## Надійне читання числа: повний приклад
+
+Зберемо все разом. Задача: прочитати ціле число у заданому діапазоні,
+не даючи користувачеві жодного шансу зламати програму.
+
+```csharp
+int ReadIntInRange(string prompt, int min, int max)
+{
+    while (true)
+    {
+        Console.Write($"{prompt} ({min}–{max}): ");
+        string input = (Console.ReadLine() ?? "").Trim();
+
+        if (input.Length == 0)
+        {
+            Console.WriteLine("  Ви нічого не ввели. Спробуйте ще раз.");
+            continue;
+        }
+
+        if (!int.TryParse(input, out int value))
+        {
+            Console.WriteLine($"  «{input}» — це не ціле число.");
+            continue;
+        }
+
+        if (value < min || value > max)
+        {
+            Console.WriteLine($"  Число має бути від {min} до {max}. Ви ввели {value}.");
+            continue;
+        }
+
+        return value;   // єдиний вихід із циклу — коректне значення
+    }
+}
+
+// Використання
+int age = ReadIntInRange("Введіть ваш вік", 6, 120);
+int grade = ReadIntInRange("Введіть оцінку", 1, 12);
+
+Console.WriteLine($"\nВік: {age}, оцінка: {grade}");
+```
+
+**Вивід:**
+
+```
+Введіть ваш вік (6–120):
+  Ви нічого не ввели. Спробуйте ще раз.
+Введіть ваш вік (6–120): сімнадцять
+  «сімнадцять» — це не ціле число.
+Введіть ваш вік (6–120): 200
+  Число має бути від 6 до 120. Ви ввели 200.
+Введіть ваш вік (6–120): 17
+Введіть оцінку (1–12): 11
+
+Вік: 17, оцінка: 11
+```
+
+Розберемо, чому цей код такий, а не інакший.
+
+**`while (true)` з виходом через `return`.** Цикл крутиться, поки не буде
+коректного значення. Єдиний вихід — `return` у самому кінці, і він
+досяжний, тільки якщо всі перевірки пройдено. Це надійніше, ніж прапорець
+`bool isValid`, за яким треба стежити.
+
+**`.Trim()` одразу.** Користувач майже завжди залишає зайвий пробіл.
+`int.TryParse` пробіли з боків насправді прощає, але звичка обрізати ввід
+корисна: для рядків це критично.
+
+**Три окремі перевірки з різними повідомленнями.** Не «неправильне
+введення», а конкретно що саме не так. Повідомлення «Число має бути
+від 6 до 120. Ви ввели 200» — це повага до користувача.
+
+**Жодного `try/catch`.** Цей код не може кинути винятку взагалі. Це і є
+мета валідації: не ловити помилку, а не допустити її.
+
+Аналогічний метод для дробових чисел:
+
+```csharp
+double ReadDouble(string prompt, double min, double max)
+{
+    while (true)
+    {
+        Console.Write($"{prompt}: ");
+        string input = (Console.ReadLine() ?? "").Trim().Replace('.', ',');
+
+        if (double.TryParse(input, out double value) && value >= min && value <= max)
+        {
+            return value;
+        }
+
+        Console.WriteLine($"  Потрібне число від {min} до {max}. Приклад: {min + 0.5}");
+    }
+}
+```
+
+Тут перевірки об'єднані в одну умову — коротше, але повідомлення менш точне.
+Обидва підходи мають право на життя; вибирайте залежно від того, наскільки
+важлива якість підказок.
+
+### Валідація рядка
+
+Числа — не єдине, що треба перевіряти.
+
+```csharp
+string ReadName(string prompt)
+{
+    while (true)
+    {
+        Console.Write($"{prompt}: ");
+        string input = (Console.ReadLine() ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            Console.WriteLine("  Поле не може бути порожнім.");
+            continue;
+        }
+
+        if (input.Length < 2 || input.Length > 40)
+        {
+            Console.WriteLine("  Довжина має бути від 2 до 40 символів.");
+            continue;
+        }
+
+        bool hasDigit = false;
+        foreach (char ch in input)
+        {
+            if (char.IsDigit(ch)) hasDigit = true;
+        }
+
+        if (hasDigit)
+        {
+            Console.WriteLine("  Ім'я не повинно містити цифр.");
+            continue;
+        }
+
+        return input;
+    }
+}
+```
+
+Корисні методи для перевірки рядків і символів:
+
+| Метод | Що перевіряє |
+| --- | --- |
+| `string.IsNullOrEmpty(s)` | `null` або порожній рядок |
+| `string.IsNullOrWhiteSpace(s)` | ще й самі пробіли/табуляції |
+| `s.Trim()` | обрізає пробіли з обох боків |
+| `char.IsDigit(c)` | символ — цифра |
+| `char.IsLetter(c)` | символ — літера (у тому числі кирилиця) |
+| `char.IsLetterOrDigit(c)` | літера або цифра |
+| `s.StartsWith(...)` / `s.EndsWith(...)` | початок / кінець рядка |
+| `s.Contains(...)` | містить підрядок |
+| `s.All(char.IsDigit)` | усі символи — цифри (потрібен `using System.Linq;`) |
+
+## Виняток чи перевірка?
+
+Головна таблиця цієї теми. Вона відповідає на питання, яке студенти
+задають найчастіше: «а коли `try/catch`, а коли просто `if`?».
+
+| Ситуація | Правильний інструмент | Чому |
+| --- | --- | --- |
+| Користувач ввів текст замість числа | `TryParse` + `if` | це очікувана, звичайна ситуація |
+| Користувач ввів число поза діапазоном | `if` | звичайна перевірка умови |
+| Порожній рядок з клавіатури | `IsNullOrWhiteSpace` + `if` | дешево і зрозуміло |
+| Дільник дорівнює нулю | `if (divisor != 0)` | перевірити легше, ніж ловити |
+| Індекс може вийти за межі масиву | `if (i >= 0 && i < arr.Length)` | те саме |
+| Ключа може не бути у словнику | `TryGetValue` | спеціально для цього створено |
+| Файл може не існувати | `File.Exists` **і** `try/catch` | між перевіркою і читанням файл можуть видалити |
+| Немає прав доступу до файлу | тільки `try/catch` | перевірити наперед неможливо |
+| Диск заповнено під час запису | тільки `try/catch` | не передбачити |
+| Мережа зникла | тільки `try/catch` | не передбачити |
+| Метод отримав недопустимий аргумент | `throw new ArgumentException` | ви повідомляєте того, хто вас викликав |
+| Дані у файлі пошкоджені | `try/catch` навколо читання | зовнішні дані, формат не гарантований |
+
+Правило, яке узагальнює всю таблицю:
+
+> **Якщо ситуацію можна дешево перевірити наперед — перевіряйте `if`-ом.
+> Якщо перевірити наперед неможливо або перевірка нічого не гарантує —
+> ловіть виняток.**
+
+Класичний приклад останнього — файли. Ви пишете `File.Exists("data.txt")`,
+отримуєте `true`, і за мілісекунду до вашого читання інша програма файл
+видаляє. Це називається *race condition*, і жодна перевірка тут не рятує —
+тільки `try/catch`. Тому в реальному коді роблять **і те, і те**: перевірка
+дає гарний текст помилки у звичайному випадку, `try/catch` страхує від рідкого.
+
+:::info Цікаво
+Ця дилема має назву — LBYL проти EAFP. *Look Before You Leap* («подивись,
+перш ніж стрибати») — це перевірки. *Easier to Ask Forgiveness than Permission*
+(«легше вибачитись, ніж просити дозволу») — це винятки. У світі C#
+переважає перший підхід, у Python — другий, і це багато в чому питання
+культури мови, а не абсолютної істини.
+:::
+
+## Типові помилки
+
+**1. Використовувати `Parse` для даних із клавіатури.**
+
+```csharp
+int age = int.Parse(Console.ReadLine());   // впаде на першому ж «абв»
+```
+
+Завжди `TryParse`. Завжди.
+
+**2. Обгортати `Parse` у `try/catch` замість `TryParse`.**
+
+```csharp
+try { age = int.Parse(input); }
+catch (FormatException) { Console.WriteLine("Не число"); }
+```
+
+Працює, але це чотири рядки й дорога операція там, де достатньо одного
+`if (int.TryParse(...))`. Викладачі це помічають.
+
+**3. Перевіряти вже після використання.**
+
+```csharp
+int result = 100 / divisor;
+if (divisor == 0) Console.WriteLine("Ділення на нуль!");   // пізно
+```
+
+Перевірка має бути **до** дії.
+
+**4. Кидати `Exception` замість конкретного типу.**
+
+```csharp
+throw new Exception("Вік від'ємний");    // погано
+throw new ArgumentOutOfRangeException(nameof(age), "Вік від'ємний");   // добре
+```
+
+`catch (Exception)` — єдиний спосіб спіймати перший варіант, а він ловить
+геть усе. Ви позбавляєте того, хто ловить, можливості реагувати вибірково.
+
+**5. Валідувати в одному місці, а використовувати в іншому.**
+Якщо метод сам читає з клавіатури і сам перевіряє — добре. Якщо один метод
+читає, інший перевіряє, третій використовує, і між ними значення десь
+губиться — рано чи пізно перевірку забудуть. Тримайте читання і валідацію
+поруч, як у `ReadIntInRange`.
+
+## Підсумок теми
+
+- **Виняток** — механізм повідомлення про ситуацію, у якій продовжити
+  звичайним шляхом неможливо. Він «летить угору» по стеку викликів,
+  доки не знайде `catch`.
+- **Стек-трейс** — це адреса помилки. Читати його треба зверху вниз;
+  перший рядок із вашим файлом — місце падіння.
+- **`try/catch/finally`** ловить винятки; `catch` пишуть від конкретного
+  до загального; `finally` виконується майже завжди; `using` — це
+  скорочення для `try/finally` з `Dispose`.
+- **`throw;`**, а не `throw ex;` — інакше втратите стек-трейс.
+- **Порожній `catch { }`** — найгірша практика: ви вимикаєте сигналізацію,
+  а не гасите пожежу.
+- **`throw new ArgumentException`** — коли ваш метод отримав те, з чим
+  не може працювати. Охоронні перевірки — на початку методу.
+- **`TryParse`** замість `Parse` для будь-яких зовнішніх даних.
+- **Винятки дорогі** і не призначені для керування звичайним потоком
+  програми. Що можна перевірити `if`-ом — перевіряйте `if`-ом.

@@ -1,10 +1,10 @@
 {
-    "label": "Тема 22. Робота з форматами даних: XML та JSON",
-    "position": 22,
-    "link": {
-        "type": "generated-index",
-        "slug": "xml-json-dotnet",
-        "title": "Робота з форматами даних: XML та JSON",
-        "description": "Структура та синтаксис XML. Читання та запис XML через XDocument і LINQ to XML. Атрибути, XPath, трансформації. Формат JSON та серіалізація через System.Text.Json. Десеріалізація складних об'єктів. Практичний WPF-додаток — менеджер нотаток із збереженням у файл."
-    }
+  "label": "Тема 22. Елементи керування та контейнери",
+  "position": 22,
+  "link": {
+    "type": "generated-index",
+    "slug": "windows-forms-controls-containers",
+    "title": "Елементи керування та контейнери",
+    "description": "Основні елементи управління: Button, TextBox, Label, RichTextBox, CheckBox, RadioButton. Контейнери GroupBox, Panel, TabControl. Використання елементів «дерево» та «таблиця». Властивості прив’язки та вирівнювання елементів. Обробка подій миші та клавіатури. Підключення обробників подій до елементів керування для інтеграції бізнес-логіки."
+  }
 }

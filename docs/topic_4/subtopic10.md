@@ -1,5 +1,6 @@
 ---
 sidebar_label: Структури в C#
+sidebar_position: 10
 ---
 # Структури в C#
 

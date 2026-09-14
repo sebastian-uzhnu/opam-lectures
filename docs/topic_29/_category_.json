@@ -1,0 +1,10 @@
+{
+  "label": "Тема 29. Робота з форматами даних: XML та JSON",
+  "position": 29,
+  "link": {
+    "type": "generated-index",
+    "slug": "xml-json-dotnet",
+    "title": "Робота з форматами даних: XML та JSON",
+    "description": "Стандартні засоби .NET для роботи з XML: XmlDocument, XDocument, XmlSerializer. Схеми XML та валідація. Використання LINQ to XML для зручної обробки документів. Основи JSON, бібліотека System.Text.Json: серіалізація та десеріалізація об’єктів у JSON. Практичні приклади — збереження конфігурацій, обмін даними між додатками, робота з REST API."
+  }
+}

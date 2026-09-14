@@ -2,602 +2,808 @@
 sidebar_position: 4
 ---
 
-# DispatcherTimer та покрокові анімації
+# Тестування, відлагодження, рефакторинг і Git
 
-## Коли Storyboard недостатньо
+Програма працює. Здавалося б, усе. Насправді зроблено приблизно дві третини
+роботи: попереду перевірка на межових випадках, полювання на баг, наведення
+ладу в коді та підготовка проєкту до здачі.
 
-`Storyboard` чудово підходить для анімацій із заздалегідь відомими значеннями (`From`/`To`). Але іноді потрібно:
+Саме ця частина відрізняє «код, який запустився в мене на ноутбуці»
+від «проєкту, який можна показати».
 
-- Малювати криву **поступово**, точка за точкою
-- Анімувати малювання спірографа як живий процес
-- Будувати криву, де наступна точка залежить від попередньої (фракталоподібні криві)
-- Змінювати напрямок або поведінку під час виконання
+## Ручне тестування за чеклістом
 
-У таких випадках використовується **`DispatcherTimer`** — таймер, що виконує зворотний виклик у потоці UI з заданим інтервалом.
+**Тестування** — це не «поклацав, наче працює». Це систематична перевірка
+за заздалегідь складеним списком. Список складають **до** тестування,
+поки ви ще не втомилися і не почали себе жаліти.
 
-## DispatcherTimer: основи
+Головна ідея: перевіряти не «звичайний» шлях (він майже завжди працює),
+а **межові випадки** — ситуації на краю допустимого.
 
-```csharp
-using System.Windows.Threading;
+### Звідки беруться межові випадки
 
-private DispatcherTimer _timer;
+| Джерело | Питання, яке ставимо | Приклад для трекера |
+|---|---|---|
+| Порожнеча | а якщо нічого немає? | 0 витрат, порожній файл, порожня нотатка |
+| Один елемент | а якщо рівно один? | звіт за місяць з однією витратою |
+| Межа діапазону | а точно на межі? | сума 0,01 і 1 000 000 |
+| За межею | а на крок далі? | сума 0 і 1 000 000,01 |
+| Не той тип | а якщо взагалі не число? | «сто гривень» у полі суми |
+| Зовнішній світ | а якщо файл зайнятий, зіпсований, зник? | відкрити CSV в Excel і зберегти |
 
-private void StartTimer()
-{
-    _timer = new DispatcherTimer
-    {
-        Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS
-    };
-    _timer.Tick += OnTick;
-    _timer.Start();
-}
+### Чекліст трекера витрат
 
-private void OnTick(object sender, EventArgs e)
-{
-    // Цей код виконується кожні 16 мілісекунд
-    // Тут відбувається наступний "крок" анімації
-}
+Пройдіть його повністю перед здачею. Позначайте результат: пройдено / провалено.
 
-private void StopTimer()
-{
-    _timer?.Stop();
-}
-```
+**Дані та їх збереження**
 
-:::info Інтервал і FPS
-- 16 мс ≈ 60 кадрів/сек
-- 33 мс ≈ 30 кадрів/сек
-- 100 мс = 10 кадрів/сек (помітне гальмування)
+| Що перевіряємо | Очікуваний результат |
+|---|---|
+| Перший запуск, файлу немає | «Записів: 0», програма працює |
+| Додати запис, зберегти, вийти, запустити знову | запис на місці |
+| Файл `expenses.csv` порожній (0 байт) | «Записів: 0», без падіння |
+| У файлі лише рядок заголовка | «Записів: 0», без падіння |
+| Зіпсувати рядок у файлі (стерти крапку з комою) | повідомлення з номером рядка, програма не падає |
+| Нотатка з крапкою з комою: `Кава; тістечко` | зберігається і читається без втрат |
+| Нотатка з лапками: `Він сказав "дякую"` | зберігається і читається без втрат |
+| Відкрити CSV в Excel і не закривати, натиснути «Зберегти» | зрозуміле повідомлення, дані в пам'яті цілі |
+| Зробити файл «тільки для читання», зберегти | зрозуміле повідомлення про права |
 
-WPF сам по собі рендерить з частотою монітора (зазвичай 60 Hz), тому 16 мс — оптимальний інтервал для плавних анімацій.
+**Валідація введення**
+
+| Що вводимо | Очікуваний результат |
+|---|---|
+| Сума: `сто` | «Це не схоже на число», перепитує |
+| Сума: `-50` | «Сума має бути від 0,01…», перепитує |
+| Сума: `0` | відхилено |
+| Сума: `0,01` | прийнято (нижня межа) |
+| Сума: `1000000` | прийнято (верхня межа) |
+| Сума: `1000001` | відхилено |
+| Сума: `245.50` з крапкою | прийнято |
+| Дата: `32.13.2025` | «Формат дати…», перепитує |
+| Дата: `01.01.2099` | «Дата не може бути в майбутньому» |
+| Дата: порожній рядок | підставляється сьогоднішня |
+| Категорія: `9` | «Число має бути від 1 до 7» |
+| Пункт меню: `й` | перепитує, не падає |
+| Нотатка: 200 символів | обрізається до 60, не падає |
+
+**Логіка**
+
+| Сценарій | Очікуваний результат |
+|---|---|
+| Звіт за місяць без витрат | «За цей місяць витрат немає» |
+| Звіт за місяць з однією витратою | 100 % в одній категорії |
+| Витрати за листопад 2024 і листопад 2025 | у звіті за 11.2025 лише витрати 2025 року |
+| Видалити запис #2 з трьох, додати новий | новий отримує #4, а не #2 і не #3 |
+| Видалити неіснуючий номер | «Запису не знайдено», без падіння |
+| Видалити, коли список порожній | «Видаляти нічого» |
+| Вийти з незбереженими змінами | програма питає про збереження |
+| Відсотки у звіті | у сумі дають приблизно 100 % |
+
+:::tip Порада
+Заведіть у README або в окремому файлі `TESTS.md` табличку з трьох стовпців:
+«що перевіряю», «що очікую», «результат». Заповнена таблиця на захисті
+справляє незрівнянно краще враження, ніж слова «я все перевірив».
 :::
 
----
+:::warning Обережно
+Найпідступніший пункт чеклісту — передостанній рядок логіки: **місяць
+без урахування року**. Ця помилка не проявляється, поки у вашому файлі
+дані лише за один рік. Спеціально додайте запис за минулий листопад —
+і половина студентських проєктів на цьому місці розсипається.
+:::
 
-## Покрокове малювання прямої лінії
+## Пошук помилки через брейкпойнти
 
-Перший приклад: лінія, яка "малюється" поступово, від початку до кінця.
+Розберемо повний сценарій полювання на баг — саме той, про який щойно
+йшлося.
 
-**XAML:**
-```xml
-<Canvas x:Name="MainCanvas" Background="#0a0a1a">
-    <Button Content="Намалювати лінію"
-            Canvas.Left="20" Canvas.Top="20"
-            Click="OnDrawLine_Click"/>
-    <Button Content="Скинути"
-            Canvas.Left="160" Canvas.Top="20"
-            Click="OnReset_Click"/>
-</Canvas>
+### Симптом
+
+Тестувальник (тобто ви) додав запис за 15 листопада 2024 року на 2 000 грн,
+а потім побудував звіт за листопад **2025**:
+
+```
+Звіт за 11.2025
+──────────────────────────────────────────────────────────
+Кількість витрат:   4
+Загальна сума:      4 077,50 грн
 ```
 
-**C#:**
+Мало бути три витрати на 2 077,50. Звідки четверта?
+
+### Крок 1. Локалізувати
+
+Не кидайтеся читати весь код. Спитайте: **де саме могло зламатися?**
+Число «4» замість «3» з'явилося ще до всіх обчислень — отже, винен не
+`Total`, а те, що повертає `ForMonth`. Це вже звужує пошук до трьох рядків.
+
+### Крок 2. Поставити брейкпойнт
+
+**Брейкпойнт** (breakpoint, точка зупину) — позначка на рядку коду, на якій
+відлагоджувач зупиняє програму й дає роздивитися все, що відбувається.
+
+У Visual Studio: клацніть на сірому полі ліворуч від номера рядка, або
+поставте курсор на рядок і натисніть **F9**. З'явиться червоний кружечок.
+
+Ставимо його всередині `Find`, на рядку з умовою:
+
 ```csharp
-public partial class MainWindow : Window
+public List<Expense> Find(Predicate<Expense> match)
 {
-    private DispatcherTimer _timer;
-    private Polyline        _currentLine;
-    private double          _t;          // поточний параметр (0..1)
-    private const double    Step = 0.01; // крок за один тік
-
-    // Точки початку і кінця лінії
-    private Point _lineFrom = new Point(50,  200);
-    private Point _lineTo   = new Point(650, 200);
-
-    public MainWindow() => InitializeComponent();
-
-    private void OnDrawLine_Click(object sender, RoutedEventArgs e)
+    var result = new List<Expense>();
+    foreach (var expense in expenses)
     {
-        _timer?.Stop();
-        MainCanvas.Children.Clear();
-
-        // Повторно додаємо кнопки (вони були на Canvas і очистились)
-        // Краща практика — розмістити кнопки поза Canvas або зберегти посилання
-        // Тут для простоти — перезапуск через програмне керування
-
-        _currentLine = new Polyline
+        if (match(expense))          // ← брейкпойнт сюди (F9)
         {
-            Stroke          = Brushes.LimeGreen,
-            StrokeThickness = 2
-        };
-        MainCanvas.Children.Add(_currentLine);
-
-        _t = 0;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(8) };
-        _timer.Tick += DrawLineStep;
-        _timer.Start();
-    }
-
-    private void DrawLineStep(object sender, EventArgs e)
-    {
-        if (_t > 1.0)
-        {
-            _timer.Stop();
-            return;
+            result.Add(expense);
         }
+    }
+    return result;
+}
+```
 
-        double x = _lineFrom.X + _t * (_lineTo.X - _lineFrom.X);
-        double y = _lineFrom.Y + _t * (_lineTo.Y - _lineFrom.Y);
-        _currentLine.Points.Add(new Point(x, y));
+### Крок 3. Запустити і подивитися
 
-        _t += Step;
+Натискаємо **F5** (Start Debugging), у меню вибираємо звіт за 11.2025.
+Програма зупиняється на брейкпойнті. Тепер працює головна панель —
+вікно **Locals** (Debug → Windows → Locals):
+
+```
+Locals
+├── this          {ExpenseTracker.Services.ExpenseService}
+├── match         {Method = ...}
+├── result        Count = 0
+└── expense       {#1    22.11.2025      245,50 грн  Їжа  Продукти на тиждень}
+        Id        1
+        Date      {22.11.2025}
+        Amount    245.50
+        Category  Food
+```
+
+Клавіші, які треба знати напам'ять:
+
+| Клавіша | Дія | Коли |
+|---|---|---|
+| **F9** | поставити/зняти брейкпойнт | завжди |
+| **F5** | запустити / продовжити до наступного брейкпойнта | коли роздивилися |
+| **F10** | Step Over — наступний рядок, не заходячи в методи | зазвичай |
+| **F11** | Step Into — зайти всередину методу | коли підозра на цей метод |
+| **Shift+F11** | Step Out — вийти з поточного методу | коли зайшли зайве |
+| **Shift+F5** | зупинити відлагодження | коли все ясно |
+
+### Крок 4. Умовний брейкпойнт
+
+Натискати F5 по колу для кожної з чотирьох витрат нудно, а в реальній базі
+їх були б тисячі. Тому робимо **умовний брейкпойнт**: правою кнопкою
+по червоному кружечку → **Conditions…** → у поле вписуємо:
+
+```csharp
+expense.Date.Year != 2025
+```
+
+Тепер програма зупиниться **тільки** на «зайвій» витраті. Натискаємо F5 —
+і бачимо в Locals:
+
+```
+expense       {#4    15.11.2024    2 000,00 грн  Житло  Ремонт}
+        Date      {15.11.2024}
+```
+
+Запис за **2024** рік потрапив у звіт за 2025. Причина знайдена за одну зупинку.
+
+### Крок 5. Знайти рядок-винуватець
+
+Натискаємо **F11** (Step Into) на виклику `match(expense)` — і потрапляємо
+всередину лямбди, яку передав `ForMonth`:
+
+```csharp
+public List<Expense> ForMonth(int year, int month) =>
+    Find(expense => expense.Date.Month == month);
+```
+
+Ось вона. Порівняння місяця є, порівняння року немає. Параметр `year`
+оголошено, але ніде не використано — Visual Studio, до речі, підсвічує
+такі параметри сірим.
+
+### Крок 6. Виправити й перевірити
+
+```csharp
+public List<Expense> ForMonth(int year, int month) =>
+    Find(expense => expense.Date.Year == year && expense.Date.Month == month);
+```
+
+Перезапускаємо, повторюємо той самий сценарій — 3 витрати, 2 077,50 грн.
+**Брейкпойнт після виправлення знімаємо** (Debug → Delete All Breakpoints,
+Ctrl+Shift+F9), інакше через тиждень будете дивуватися, чому програма
+зупиняється невідомо де.
+
+:::info Цікаво
+Окрім Locals є ще вікно **Watch**, куди можна вписати довільний вираз
+(наприклад `expenses.Count`) і бачити його значення на кожному кроці,
+та **Immediate Window**, де можна прямо під час зупинки виконати будь-який
+код: набрати `expense.Amount * 2` і побачити результат. А **Call Stack**
+показує ланцюжок викликів — хто кого викликав, щоб опинитися тут.
+:::
+
+:::danger Часта помилка
+Замість брейкпойнтів засівати код рядками `Console.WriteLine("тут1")`.
+Це працює, але: засмічує вивід, потребує перекомпіляції на кожну зміну,
+показує лише те, що ви здогадалися вивести, — і половина цих рядків
+залишається в зданій роботі. Якщо дуже треба «логувати», є
+`System.Diagnostics.Debug.WriteLine` — воно пише у вікно Output
+і повністю зникає з релізної збірки.
+:::
+
+## Рефакторинг
+
+**Рефакторинг** — зміна структури коду **без зміни його поведінки**.
+Програма до і після робить рівно те саме; змінюється лише те, наскільки
+легко її читати й міняти.
+
+Головне правило: рефакторити можна тільки **робочий** код. Спершу
+переконайтеся, що все працює (ось для чого потрібен чекліст), потім
+наводьте лад, потім знову проженіть чекліст.
+
+### Приклад 1. Довгий метод → кілька коротких
+
+Так виглядав звіт у першій версії проєкту:
+
+**ДО:**
+
+```csharp
+private void ShowMonthReport()
+{
+    Console.WriteLine("--- ЗВІТ ЗА МІСЯЦЬ ---");
+    Console.Write("  Рік: ");
+    int year = int.Parse(Console.ReadLine());
+    Console.Write("  Місяць: ");
+    int month = int.Parse(Console.ReadLine());
+
+    var items = new List<Expense>();
+    foreach (var e in service.All())
+    {
+        if (e.Date.Year == year && e.Date.Month == month)
+        {
+            items.Add(e);
+        }
     }
 
-    private void OnReset_Click(object sender, RoutedEventArgs e)
+    if (items.Count == 0)
     {
-        _timer?.Stop();
-        MainCanvas.Children.Clear();
+        Console.WriteLine("Немає витрат");
+        return;
+    }
+
+    decimal total = 0;
+    foreach (var e in items)
+    {
+        total += e.Amount;
+    }
+
+    Console.WriteLine("Кількість: " + items.Count);
+    Console.WriteLine("Сума: " + total);
+    Console.WriteLine("Середнє: " + total / DateTime.DaysInMonth(year, month));
+
+    decimal max = 0;
+    Expense best = null;
+    foreach (var e in items)
+    {
+        if (e.Amount > max)
+        {
+            max = e.Amount;
+            best = e;
+        }
+    }
+    Console.WriteLine("Найбільша: " + best.Amount + " " + best.Note);
+
+    var totals = new Dictionary<ExpenseCategory, decimal>();
+    foreach (var e in items)
+    {
+        if (totals.ContainsKey(e.Category))
+        {
+            totals[e.Category] += e.Amount;
+        }
+        else
+        {
+            totals[e.Category] = e.Amount;
+        }
+    }
+    foreach (var p in totals)
+    {
+        Console.WriteLine(p.Key + ": " + p.Value + " ("
+            + (double)(p.Value / total) * 100 + "%)");
     }
 }
 ```
 
----
+Сорок вісім рядків. Що з ними не так:
 
-## Покрокове малювання серця
+- метод робить **п'ять** різних робіт: читає введення, фільтрує, рахує,
+  шукає максимум, форматує;
+- фільтрація й обчислення сидять в UI, хоча це робота сервісу;
+- `int.Parse` уроне програму на першому ж «привіт»;
+- змінні `e`, `p`, `max`, `best` не пояснюють себе;
+- конкатенація через `+` замість інтерполяції; відсоток виводиться
+  як `11,817094464...`;
+- `best` може лишитися `null`, і `best.Amount` впаде.
 
-Той самий підхід застосуємо до кривої серця — вона буде "з'являтись" плавно:
+**ПІСЛЯ** (той код, що ви бачили в попередньому підрозділі):
 
 ```csharp
-public partial class MainWindow : Window
+private void ShowMonthReport()
 {
-    private DispatcherTimer _timer;
-    private Polygon         _heartPolygon;
-    private int             _step;
-    private const int       TotalSteps = 500;
+    Console.WriteLine("--- ЗВІТ ЗА МІСЯЦЬ ---");
 
-    public MainWindow() => InitializeComponent();
+    int year = InputHelper.ReadInt("  Рік: ", 2000, DateTime.Today.Year);
+    int month = InputHelper.ReadInt("  Місяць (1-12): ", 1, 12);
 
-    private void OnDrawHeart_Click(object sender, RoutedEventArgs e)
+    var items = service.ForMonth(year, month);
+    Console.WriteLine();
+    Console.WriteLine($"Звіт за {month:D2}.{year}");
+    Console.WriteLine(Divider);
+
+    if (items.Count == 0)
     {
-        _timer?.Stop();
-        MainCanvas.Children.Clear();
-
-        double cx    = MainCanvas.ActualWidth  / 2;
-        double cy    = MainCanvas.ActualHeight / 2;
-        double scale = Math.Min(cx, cy) / 18; // адаптивний масштаб
-
-        // Попередньо обчислимо всі точки
-        _heartPoints = ComputeHeartPoints(cx, cy, scale, TotalSteps);
-
-        // Малюємо через Polyline (не Polygon) щоб бачити процес
-        _heartLine = new Polyline
-        {
-            Stroke          = new SolidColorBrush(Colors.HotPink),
-            StrokeThickness = 2
-        };
-        MainCanvas.Children.Add(_heartLine);
-
-        _step  = 0;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(5) };
-        _timer.Tick += DrawHeartStep;
-        _timer.Start();
+        Console.WriteLine("За цей місяць витрат немає.");
+        return;
     }
 
-    private Point[] _heartPoints;
-    private Polyline _heartLine;
+    decimal total = ExpenseService.Total(items);
+    Console.WriteLine($"Кількість витрат:   {items.Count}");
+    Console.WriteLine($"Загальна сума:      {total:N2} грн");
+    Console.WriteLine($"У середньому/день:  {ExpenseService.AveragePerDay(items, year, month):N2} грн");
 
-    private Point[] ComputeHeartPoints(double cx, double cy, double scale, int steps)
+    var largest = ExpenseService.Largest(items);
+    if (largest is not null)
     {
-        var pts = new Point[steps + 1];
-        for (int i = 0; i <= steps; i++)
-        {
-            double t = 2 * Math.PI * i / steps;
-            double x =  16 * Math.Pow(Math.Sin(t), 3);
-            double y = -(13 * Math.Cos(t) - 5 * Math.Cos(2 * t)
-                       -  2 * Math.Cos(3 * t) - Math.Cos(4 * t));
-            pts[i] = new Point(cx + x * scale, cy + y * scale);
-        }
-        return pts;
+        Console.WriteLine($"Найбільша витрата:  {largest.Amount:N2} грн — {largest.Note}");
     }
 
-    private void DrawHeartStep(object sender, EventArgs e)
-    {
-        if (_step >= _heartPoints.Length)
-        {
-            _timer.Stop();
-            return;
-        }
-        _heartLine.Points.Add(_heartPoints[_step]);
-        _step++;
-    }
+    Console.WriteLine();
+    Console.WriteLine("Розподіл за категоріями:");
+    PrintCategoryChart(ExpenseService.TotalsByCategory(items), total);
 }
 ```
 
----
+Двадцять вісім рядків, і кожен читається як речення. Обчислення переїхали
+в сервіс, введення — в `InputHelper`, малювання діаграми — в окремий метод.
 
-## Покрокове малювання спірографа
+:::tip Порада
+У Visual Studio виділіть шматок коду й натисніть **Ctrl+R, M** (Extract
+Method). Середовище саме створить метод, підбере параметри й підставить
+виклик. Перейменування — **Ctrl+R, R** (Rename): змінює назву в усіх
+місцях одразу, включно з коментарями, якщо поставити галочку. Не робіть
+цього руками.
+:::
 
-Спірограф особливо красиво виглядає при покроковому малюванні — видно, як рухається пензлик по складній траєкторії.
+### Приклад 2. Дублювання → спільний метод
+
+**ДО:** три фільтри, три майже однакові цикли.
 
 ```csharp
-public partial class MainWindow : Window
+public List<Expense> ByCategory(ExpenseCategory category)
 {
-    private DispatcherTimer _timer;
-    private Polyline        _spiroLine;
-    private Point[]         _spiroPoints;
-    private int             _spiroStep;
-
-    // Параметри спірографа
-    private double _R = 120, _r = 40, _d = 80;
-
-    private void OnDrawSpiro_Click(object sender, RoutedEventArgs e)
+    var result = new List<Expense>();
+    foreach (var expense in expenses)
     {
-        _timer?.Stop();
-        MainCanvas.Children.Clear();
-
-        double cx = MainCanvas.ActualWidth  / 2;
-        double cy = MainCanvas.ActualHeight / 2;
-
-        _spiroPoints = ComputeSpiroPoints(cx, cy, _R, _r, _d);
-
-        _spiroLine = new Polyline
+        if (expense.Category == category)
         {
-            Stroke          = new SolidColorBrush(Colors.Cyan),
-            StrokeThickness = 1.5
-        };
-        MainCanvas.Children.Add(_spiroLine);
-
-        _spiroStep = 0;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(4) };
-        _timer.Tick += DrawSpiroStep;
-        _timer.Start();
-    }
-
-    private Point[] ComputeSpiroPoints(double cx, double cy,
-                                       double R,  double r, double d)
-    {
-        int    gcd   = GCD((int)R, (int)r);
-        double tMax  = 2 * Math.PI * (r / gcd);
-        int    steps = (int)(tMax / 0.002);
-        var    pts   = new Point[steps + 1];
-
-        for (int i = 0; i <= steps; i++)
-        {
-            double t = tMax * i / steps;
-            double x = (R - r) * Math.Cos(t) + d * Math.Cos((R - r) / r * t);
-            double y = (R - r) * Math.Sin(t) - d * Math.Sin((R - r) / r * t);
-            pts[i] = new Point(cx + x, cy + y);
-        }
-        return pts;
-    }
-
-    private void DrawSpiroStep(object sender, EventArgs e)
-    {
-        if (_spiroStep >= _spiroPoints.Length)
-        {
-            _timer.Stop();
-            return;
-        }
-        // Додаємо кілька точок за тік для більшої швидкості малювання
-        int batchSize = 3;
-        for (int i = 0; i < batchSize && _spiroStep < _spiroPoints.Length; i++)
-        {
-            _spiroLine.Points.Add(_spiroPoints[_spiroStep]);
-            _spiroStep++;
+            result.Add(expense);
         }
     }
+    return result;
+}
 
-    private static int GCD(int a, int b) => b == 0 ? a : GCD(b, a % b);
+public List<Expense> ForMonth(int year, int month)
+{
+    var result = new List<Expense>();
+    foreach (var expense in expenses)
+    {
+        if (expense.Date.Year == year && expense.Date.Month == month)
+        {
+            result.Add(expense);
+        }
+    }
+    return result;
+}
+
+public List<Expense> Expensive(decimal threshold)
+{
+    var result = new List<Expense>();
+    foreach (var expense in expenses)
+    {
+        if (expense.Amount > threshold)
+        {
+            result.Add(expense);
+        }
+    }
+    return result;
 }
 ```
 
----
+Двадцять сім рядків, з яких відрізняється **один** — умова в `if`.
+Якщо знайдеться помилка в циклі, виправляти доведеться тричі.
 
-## Повний проект: інтерактивна галерея з покроковою анімацією
+**ПІСЛЯ:** цикл один, умова — параметр-делегат.
 
-Тепер об'єднаємо все у один застосунок з керуванням через UI:
-
-**XAML:**
-```xml
-<Window ...
-        Title="Математична графіка WPF"
-        Height="620" Width="900"
-        Background="#0a0a1a">
-    <DockPanel>
-        <!-- Панель управління зліва -->
-        <Border DockPanel.Dock="Left" Width="200"
-                Background="#12122a" Padding="12">
-            <StackPanel>
-                <TextBlock Text="Фігури" Foreground="White"
-                           FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
-
-                <Button x:Name="BtnLine"   Content="Лінія"
-                        Margin="0,4" Click="OnLine_Click"/>
-                <Button x:Name="BtnHeart"  Content="Серце"
-                        Margin="0,4" Click="OnHeart_Click"/>
-                <Button x:Name="BtnSpiro1" Content="Спіро: квітка 3"
-                        Margin="0,4" Click="OnSpiro1_Click"/>
-                <Button x:Name="BtnSpiro2" Content="Спіро: квітка 4"
-                        Margin="0,4" Click="OnSpiro2_Click"/>
-                <Button x:Name="BtnSpiro3" Content="Спіро: зірка"
-                        Margin="0,4" Click="OnSpiro3_Click"/>
-                <Button x:Name="BtnEpitro" Content="Епітрохоїда"
-                        Margin="0,4" Click="OnEpitro_Click"/>
-
-                <Separator Margin="0,12" Background="#333"/>
-
-                <TextBlock Text="Швидкість" Foreground="#aaa" Margin="0,0,0,4"/>
-                <Slider x:Name="SpeedSlider"
-                        Minimum="1" Maximum="20" Value="5"
-                        Foreground="White"/>
-
-                <Separator Margin="0,12" Background="#333"/>
-
-                <Button Content="Стоп"    Margin="0,4" Click="OnStop_Click"/>
-                <Button Content="Очистити" Margin="0,4" Click="OnClear_Click"/>
-
-                <!-- Індикатор статусу -->
-                <TextBlock x:Name="StatusText"
-                           Foreground="#aaa" FontSize="11"
-                           Margin="0,16,0,0" TextWrapping="Wrap"
-                           Text="Оберіть фігуру для малювання"/>
-            </StackPanel>
-        </Border>
-
-        <!-- Полотно для малювання -->
-        <Canvas x:Name="MainCanvas" Background="#0f0f23"
-                SizeChanged="OnCanvasSizeChanged"/>
-    </DockPanel>
-</Window>
-```
-
-**C# (MainWindow.xaml.cs):**
 ```csharp
-using System;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Shapes;
-using System.Windows.Threading;
-
-namespace MathGraphicsWpf
+public List<Expense> Find(Predicate<Expense> match)
 {
-    public partial class MainWindow : Window
+    var result = new List<Expense>();
+    foreach (var expense in expenses)
     {
-        private DispatcherTimer _timer;
-        private Polyline        _activeLine;
-        private Point[]         _points;
-        private int             _pointIndex;
-
-        public MainWindow() => InitializeComponent();
-
-        // --- Обробники кнопок ---
-
-        private void OnLine_Click(object sender, RoutedEventArgs e)
+        if (match(expense))
         {
-            double cx = MainCanvas.ActualWidth  / 2;
-            double cy = MainCanvas.ActualHeight / 2;
-            StartDrawing(
-                ComputeLine(new Point(cx - 250, cy), new Point(cx + 250, cy)),
-                Brushes.LimeGreen, 2, "Пряма лінія");
+            result.Add(expense);
         }
-
-        private void OnHeart_Click(object sender, RoutedEventArgs e)
-        {
-            double cx    = MainCanvas.ActualWidth  / 2;
-            double cy    = MainCanvas.ActualHeight / 2;
-            double scale = Math.Min(cx, cy) / 18;
-            StartDrawing(
-                ComputeHeart(cx, cy, scale, 600),
-                new SolidColorBrush(Colors.HotPink), 2, "Крива серця");
-        }
-
-        private void OnSpiro1_Click(object sender, RoutedEventArgs e)
-            => StartSpiro(120, 40, 80,  Colors.Cyan,     "Спірограф: 3 пелюстки");
-
-        private void OnSpiro2_Click(object sender, RoutedEventArgs e)
-            => StartSpiro(120, 30, 90,  Colors.Gold,     "Спірограф: 4 пелюстки");
-
-        private void OnSpiro3_Click(object sender, RoutedEventArgs e)
-            => StartSpiro(100, 37, 85,  Colors.Violet,   "Спірограф: зірка");
-
-        private void OnEpitro_Click(object sender, RoutedEventArgs e)
-        {
-            double cx = MainCanvas.ActualWidth  / 2;
-            double cy = MainCanvas.ActualHeight / 2;
-            StartDrawing(
-                ComputeEpitrochoid(cx, cy, 80, 30, 80),
-                new SolidColorBrush(Colors.OrangeRed), 1.5, "Епітрохоїда");
-        }
-
-        private void OnStop_Click(object sender, RoutedEventArgs e)
-        {
-            _timer?.Stop();
-            StatusText.Text = "Зупинено.";
-        }
-
-        private void OnClear_Click(object sender, RoutedEventArgs e)
-        {
-            _timer?.Stop();
-            MainCanvas.Children.Clear();
-            StatusText.Text = "Полотно очищено.";
-        }
-
-        private void OnCanvasSizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            // Canvas змінив розмір — зупиняємо поточну анімацію
-            _timer?.Stop();
-        }
-
-        // --- Запуск малювання ---
-
-        private void StartSpiro(double R, double r, double d, Color color, string name)
-        {
-            double cx = MainCanvas.ActualWidth  / 2;
-            double cy = MainCanvas.ActualHeight / 2;
-            StartDrawing(
-                ComputeSpiro(cx, cy, R, r, d),
-                new SolidColorBrush(color), 1.5, name);
-        }
-
-        private void StartDrawing(Point[] points, Brush color,
-                                   double thickness, string name)
-        {
-            _timer?.Stop();
-            MainCanvas.Children.Clear();
-
-            _activeLine = new Polyline
-            {
-                Stroke          = color,
-                StrokeThickness = thickness
-            };
-            MainCanvas.Children.Add(_activeLine);
-
-            _points     = points;
-            _pointIndex = 0;
-
-            int interval = Math.Max(1, (int)(21 - SpeedSlider.Value));
-            _timer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(interval)
-            };
-            _timer.Tick += OnTick;
-            _timer.Start();
-
-            StatusText.Text = $"Малюємо: {name}\n{points.Length} точок";
-        }
-
-        private void OnTick(object sender, EventArgs e)
-        {
-            if (_pointIndex >= _points.Length)
-            {
-                _timer.Stop();
-                StatusText.Text = StatusText.Text.Replace("Малюємо:", "Готово:");
-                return;
-            }
-
-            // Кількість точок за тік залежить від швидкості
-            int batch = Math.Max(1, (int)SpeedSlider.Value);
-            for (int i = 0; i < batch && _pointIndex < _points.Length; i++)
-            {
-                _activeLine.Points.Add(_points[_pointIndex++]);
-            }
-        }
-
-        // --- Обчислення точок ---
-
-        private static Point[] ComputeLine(Point from, Point to, int steps = 200)
-        {
-            var pts = new Point[steps + 1];
-            for (int i = 0; i <= steps; i++)
-            {
-                double t = (double)i / steps;
-                pts[i] = new Point(
-                    from.X + t * (to.X - from.X),
-                    from.Y + t * (to.Y - from.Y));
-            }
-            return pts;
-        }
-
-        private static Point[] ComputeHeart(double cx, double cy,
-                                             double scale, int steps)
-        {
-            var pts = new Point[steps + 1];
-            for (int i = 0; i <= steps; i++)
-            {
-                double t = 2 * Math.PI * i / steps;
-                double x =  16 * Math.Pow(Math.Sin(t), 3);
-                double y = -(13 * Math.Cos(t) - 5 * Math.Cos(2 * t)
-                           -  2 * Math.Cos(3 * t) - Math.Cos(4 * t));
-                pts[i] = new Point(cx + x * scale, cy + y * scale);
-            }
-            return pts;
-        }
-
-        private static Point[] ComputeSpiro(double cx, double cy,
-                                             double R,  double r, double d)
-        {
-            int    gcd   = GCD((int)R, (int)r);
-            double tMax  = 2 * Math.PI * (r / gcd);
-            int    steps = (int)(tMax / 0.001);
-            var    pts   = new Point[steps + 1];
-
-            for (int i = 0; i <= steps; i++)
-            {
-                double t = tMax * i / steps;
-                double x = (R - r) * Math.Cos(t) + d * Math.Cos((R - r) / r * t);
-                double y = (R - r) * Math.Sin(t) - d * Math.Sin((R - r) / r * t);
-                pts[i] = new Point(cx + x, cy + y);
-            }
-            return pts;
-        }
-
-        private static Point[] ComputeEpitrochoid(double cx, double cy,
-                                                   double R,  double r, double d)
-        {
-            int    gcd   = GCD((int)R, (int)r);
-            double tMax  = 2 * Math.PI * (r / gcd);
-            int    steps = (int)(tMax / 0.001);
-            var    pts   = new Point[steps + 1];
-
-            for (int i = 0; i <= steps; i++)
-            {
-                double t = tMax * i / steps;
-                double x = (R + r) * Math.Cos(t) - d * Math.Cos((R + r) / r * t);
-                double y = (R + r) * Math.Sin(t) - d * Math.Sin((R + r) / r * t);
-                pts[i] = new Point(cx + x, cy + y);
-            }
-            return pts;
-        }
-
-        private static int GCD(int a, int b) => b == 0 ? a : GCD(b, a % b);
     }
+    return result;
 }
+
+public List<Expense> ByCategory(ExpenseCategory category) =>
+    Find(expense => expense.Category == category);
+
+public List<Expense> ForMonth(int year, int month) =>
+    Find(expense => expense.Date.Year == year && expense.Date.Month == month);
+
+public List<Expense> Expensive(decimal threshold) =>
+    Find(expense => expense.Amount > threshold);
 ```
 
----
+Сімнадцять рядків замість двадцяти семи, і будь-який новий фільтр тепер
+коштує **один** рядок.
 
-## Комбінація Storyboard + DispatcherTimer
+Прийом називають **правилом трьох**: перше повторення терпимо, друге
+насторожує, третє — сигнал витягувати спільне.
 
-Часто найкращий підхід — поєднати обидва методи:
-- `DispatcherTimer` керує покроковим малюванням
-- `Storyboard` анімує властивості вже намальованих елементів
+### Приклад 3. Магічні числа → константи
+
+**Магічне число** — числовий літерал у коді, походження якого незрозуміле
+без пояснень.
+
+**ДО:**
 
 ```csharp
-private void AnimateDrawnCurve()
+if (amount < 0.01m || amount > 1000000m)
 {
-    // Після завершення покрокового малювання
-    // запускаємо Storyboard-анімацію кольору вже намальованої лінії
-
-    var brush = new SolidColorBrush(Colors.Cyan);
-    _activeLine.Stroke = brush;
-    this.RegisterName("drawnBrush", brush);
-
-    var anim = new ColorAnimationUsingKeyFrames
-    {
-        Duration       = TimeSpan.FromSeconds(3),
-        RepeatBehavior = RepeatBehavior.Forever
-    };
-    anim.KeyFrames.Add(new LinearColorKeyFrame(Colors.Cyan,    KeyTime.FromPercent(0.0)));
-    anim.KeyFrames.Add(new LinearColorKeyFrame(Colors.Magenta, KeyTime.FromPercent(0.33)));
-    anim.KeyFrames.Add(new LinearColorKeyFrame(Colors.Gold,    KeyTime.FromPercent(0.67)));
-    anim.KeyFrames.Add(new LinearColorKeyFrame(Colors.Cyan,    KeyTime.FromPercent(1.0)));
-
-    Storyboard.SetTargetName(anim, "drawnBrush");
-    Storyboard.SetTargetProperty(anim, new PropertyPath(SolidColorBrush.ColorProperty));
-
-    var sb = new Storyboard();
-    sb.Children.Add(anim);
-    sb.Begin(this);
+    Console.WriteLine("Погана сума");
 }
+
+if (note.Length > 60)
+{
+    note = note.Substring(0, 60);
+}
+
+string bar = new string('#', (int)(percent / 5));
 ```
 
----
+Питання, на які цей код не відповідає: чому саме `60`? чому `5`? Чи це
+той самий `60`, що й у сховищі? Якщо завтра треба дозволити 100 символів —
+скільки місць доведеться змінити і чи всі ви знайдете?
 
-## Підсумок теми
+**ПІСЛЯ:**
 
-| Підхід | Коли використовувати |
+```csharp
+// у класі Expense
+public const decimal MinAmount = 0.01m;
+public const decimal MaxAmount = 1_000_000m;
+public const int MaxNoteLength = 60;
+
+// у класі MenuApp
+private const int PercentPerBarChar = 5;   // 100% = 20 символів смужки
+```
+
+```csharp
+if (amount < Expense.MinAmount || amount > Expense.MaxAmount)
+{
+    Console.WriteLine($"Сума має бути від {Expense.MinAmount} до {Expense.MaxAmount}.");
+}
+
+if (note.Length > Expense.MaxNoteLength)
+{
+    note = note[..Expense.MaxNoteLength];
+}
+
+string bar = new string('#', (int)Math.Round(percent / PercentPerBarChar));
+```
+
+Тепер значення живе в одному місці, має ім'я, яке пояснює зміст, і потрапляє
+навіть у текст повідомлення про помилку — тож повідомлення ніколи
+не розійдеться з реальною перевіркою.
+
+:::note
+Не кожне число магічне. `0` і `1` у циклах, `2` у «поділити навпіл»,
+`100` у переведенні в відсотки — усім зрозумілі й іменувати їх не треба.
+Магічне число — це те, побачивши яке, читач питає «а чому саме стільки?».
+:::
+
+### Чеклист рефакторингу
+
+Пройдіться цим списком по своєму проєкту перед здачею:
+
+| Ознака | Що робити |
 |---|---|
-| `ColorAnimation` | Плавна зміна кольору фону, обводки, заливки |
-| `DoubleAnimation` | Переміщення, масштаб, поворот, прозорість |
-| `PointAnimation` | Переміщення точок у геометрії |
-| `*AnimationUsingKeyFrames` | Кілька проміжних значень, нелінійна анімація |
-| `DispatcherTimer` | Покрокова побудова, алгоритмічна анімація, фізичні симуляції |
-| Комбінація | Малювання + анімація кольору/розміру готового елемента |
+| Метод не вміщається на екран | розбити на кілька (Extract Method) |
+| Два схожі шматки коду | винести спільне, різницю — у параметр |
+| Назва `a`, `tmp`, `data2` | перейменувати осмислено (Ctrl+R, R) |
+| Число без пояснення | зробити іменованою константою |
+| Закоментований код | видалити — історія зберігається в Git |
+| Вкладеність `if` глибша за 3 | ранній `return`, інверсія умови |
+| `Console.WriteLine` поза шаром UI | перенести або прибрати |
+| Клас, який не описати без «і» | розділити |
 
-**Корисні ресурси для подальшого вивчення:**
-- [Wolfram MathWorld — Curves](https://mathworld.wolfram.com/topics/Curves.html)
-- [Desmos — побудова графіків онлайн](https://www.desmos.com/calculator)
-- [WPF Animation Overview — Microsoft Docs](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/animation-overview)
-- [WPF Storyboards — Microsoft Docs](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/storyboards-overview)
-- [Wikipedia: Spirograph](https://en.wikipedia.org/wiki/Spirograph)
-- [Wikipedia: Hypotrochoid](https://en.wikipedia.org/wiki/Hypotrochoid)
+## Оформлення у Git
+
+Проєкт без репозиторію на захисті виглядає як зошит без обкладинки.
+Git — це не бюрократія, а ваша страховка: історія змін, можливість
+відкотитися і доказ, що працювали ви, а не хтось за вас.
+
+### Крок 1. `.gitignore`
+
+**Найважливіший файл при першому коміті.** Він перелічує те, що в репозиторій
+класти **не треба**: результати збірки, тимчасові файли середовища, особисті
+дані.
+
+Створіть у корені проєкту файл із назвою `.gitignore` (саме так, із крапкою
+на початку, без розширення):
+
+```
+# Результати збірки .NET
+[Bb]in/
+[Oo]bj/
+
+# Тимчасові файли Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Дані застосунку — це не код
+expenses.csv
+expenses.json
+*.csv.tmp
+
+# Різне
+*.log
+Thumbs.db
+.DS_Store
+```
+
+Чому саме це:
+
+**`bin/` і `obj/`** — результат компіляції. Вони перегенеруються за одну
+секунду, важать мегабайти й змінюються при кожній збірці. Репозиторій
+із закоміченим `bin` роздувається до сотень мегабайтів і дає конфлікт
+у кожному злитті.
+
+**`.vs/` і `*.user`** — особисті налаштування середовища: які вікна відкриті,
+де стоять брейкпойнти. Вашому одногрупникові вони точно не потрібні.
+
+**`expenses.csv`** — дані користувача, а не частина проєкту. Якщо закомітити
+свій файл витрат, кожен, хто клонує репозиторій, побачить, скільки ви
+витратили на каву. Плюс постійні конфлікти при злитті.
+
+:::tip Порада
+Створити `.gitignore` у Visual Studio можна за два кліки: правою кнопкою
+по рішенню в Solution Explorer → **Add** → **New Item** → знайти
+«gitignore». А в командному рядку його згенерує
+`dotnet new gitignore` — стандартний шаблон .NET одразу з усіма правилами.
+:::
+
+### Крок 2. Перший коміт
+
+```bash
+cd C:\Projects\ExpenseTracker
+
+git init
+git add .gitignore
+git commit -m "Додано .gitignore для проєкту .NET"
+
+git add .
+git commit -m "Початкова структура проєкту ExpenseTracker"
+```
+
+Чому `.gitignore` окремим першим комітом? Щоб `git add .` у другому кроці
+вже не захопив `bin` і `obj`. Якщо зробити навпаки, доведеться видаляти
+файли з індексу командою `git rm -r --cached bin`.
+
+### Крок 3. Осмислені коміти
+
+**Коміт** — це збережений стан проєкту з описом того, що змінилося.
+Гарний коміт має дві властивості: він **атомарний** (одна логічна зміна)
+і має **зрозуміле повідомлення**.
+
+| Погане повідомлення | Чому погано | Гарне повідомлення |
+|---|---|---|
+| `fix` | що саме виправлено? | `Виправлено фільтр за місяцем: враховано рік` |
+| `робота` | яка робота? | `Додано клас Expense з валідацією` |
+| `asdf` | без коментарів | `Додано збереження у CSV` |
+| `Змінив Expense.cs, ExpenseService.cs, MenuApp.cs, Program.cs` | перелік файлів видно й так | `Додано звіт за місяць` |
+
+Формулюйте повідомлення як відповідь на питання «що робить цей коміт?»:
+**«Додано…», «Виправлено…», «Перейменовано…», «Прибрано…»**.
+
+Ось реалістична історія комітів для нашого проєкту — приблизно так має
+виглядати ваш `git log`:
+
+```
+1.  Додано .gitignore для проєкту .NET
+2.  Початкова структура проєкту ExpenseTracker
+3.  Додано enum ExpenseCategory та клас CategoryNames
+4.  Додано модель Expense з валідацією суми, дати й категорії
+5.  Додано інтерфейс IExpenseStorage та заглушку InMemoryStorage
+6.  Додано ExpenseService: додавання, видалення, фільтрація
+7.  Додано статистику: сума, підсумки за категоріями, найбільша витрата
+8.  Додано збереження у CSV з екрануванням спецсимволів
+9.  Додано обробку помилок файлу через StorageException
+10. Додано InputHelper для безпечного читання з клавіатури
+11. Додано головне меню та екран додавання витрати
+12. Додано звіт за місяць із діаграмою за категоріями
+13. Виправлено фільтр за місяцем: враховано рік
+14. Додано попередження про незбережені зміни при виході
+15. Рефакторинг: винесено PrintCategoryChart з ShowMonthReport
+16. Замінено магічні числа на константи
+17. Додано альтернативне сховище JsonExpenseStorage
+18. Додано README з описом проєкту
+```
+
+Вісімнадцять комітів — це нормально для проєкту на 660 рядків. Один коміт
+на весь проєкт («зробив лабу») — це не історія, а архів.
+
+:::warning Обережно
+Не комітьте зламаний код. Правило просте: **перед кожним комітом проєкт
+має компілюватися й запускатися**. Коміт — це точка, до якої ви зможете
+безпечно повернутися; якщо в ній нічого не працює, вона марна.
+:::
+
+### Крок 4. Викласти на GitHub
+
+```bash
+git remote add origin https://github.com/YOUR-NAME/expense-tracker.git
+git branch -M main
+git push -u origin main
+```
+
+Далі кожного разу достатньо:
+
+```bash
+git add .
+git commit -m "Опис змін"
+git push
+```
+
+### Крок 5. README
+
+**README.md** — перше (а часто й єдине), що прочитає людина, яка відкрила
+ваш репозиторій. Файл лежить у корені й показується на головній сторінці
+проєкту автоматично.
+
+Ось шаблон, який покриває все потрібне:
+
+````markdown
+# Трекер витрат
+
+Консольний застосунок для обліку особистих витрат.
+Навчальний проєкт з дисципліни «Основи програмування та алгоритмічні мови».
+
+**Автор:** Прізвище Ім'я, група ІПЗ-21
+**Технології:** C# 12, .NET 8
+
+## Можливості
+
+- додавання витрати з датою, сумою, категорією та нотаткою;
+- перегляд усіх витрат, відсортованих за датою;
+- фільтрація за категорією;
+- звіт за місяць: загальна сума, середнє на день, найбільша витрата,
+  розподіл за категоріями з текстовою діаграмою;
+- видалення помилкового запису;
+- збереження даних у CSV-файл між запусками.
+
+## Як запустити
+
+```bash
+git clone https://github.com/YOUR-NAME/expense-tracker.git
+cd expense-tracker
+dotnet run
+```
+
+Або відкрити `ExpenseTracker.sln` у Visual Studio 2022 і натиснути F5.
+
+## Структура проєкту
+
+| Папка | Призначення |
+|---|---|
+| `Models/` | клас витрати та перелік категорій |
+| `Services/` | логіка: колекція, фільтри, статистика |
+| `Storage/` | збереження у файл (CSV та JSON) |
+| `UI/` | меню та безпечне читання введення |
+
+Залежності йдуть в один бік: UI → Services → Storage → Models.
+
+## Формат файлу даних
+
+Дані зберігаються у `expenses.csv` поруч із виконуваним файлом:
+
+```
+Id;Date;Amount;Category;Note
+1;2025-11-22;245.50;1;Продукти на тиждень
+```
+
+Числа й дати записуються в інваріантній культурі, тому файл однаково
+читається на будь-яких мовних налаштуваннях системи.
+
+## Що не реалізовано
+
+- редагування наявного запису (лише додавання й видалення);
+- кілька гаманців або валют;
+- звіт за довільний період (лише за календарний місяць).
+````
+
+Останній розділ — «Що не реалізовано» — не ознака слабкості, а ознака
+зрілості. Автор, який чесно перелічує межі свого рішення, показує,
+що розуміє задачу цілком.
+
+## Критерії оцінювання захисту
+
+За цими критеріями викладач оцінюватиме лабораторну роботу. Максимум —
+100 балів.
+
+| Критерій | Балів | Що конкретно перевіряється |
+|---|---|---|
+| **Функціональність** | 25 | усі пункти ТЗ реалізовані й працюють: додавання, перегляд, фільтр, видалення, звіт, збереження |
+| **Архітектура** | 20 | поділ на шари Model/Service/Storage/UI; стрілки залежностей в один бік; є інтерфейс сховища; жодного `Console` поза UI |
+| **Якість коду** | 15 | осмислені назви; методи до 30 рядків; немає дублювання й магічних чисел; коментарі там, де пояснюють «чому» |
+| **Валідація та винятки** | 15 | програму неможливо уронити з клавіатури; помилки файлу перехоплені; повідомлення зрозумілі людині |
+| **Робота з файлом** | 10 | дані переживають перезапуск; використано `InvariantCulture`; відсутність файлу не є аварією |
+| **Git** | 10 | є `.gitignore`; `bin`/`obj` не в репозиторії; щонайменше 10 осмислених комітів; є README |
+| **Захист** | 5 | автор пояснює будь-який рядок свого коду й обґрунтовує рішення |
+
+Шкала переведення: 90–100 — «відмінно», 75–89 — «добре», 60–74 —
+«задовільно», менше 60 — робота повертається на доопрацювання.
+
+### Питання, які поставлять на захисті
+
+Підготуйтеся відповідати на такі питання про **свій** код:
+
+1. Чому ця логіка у сервісі, а не в моделі?
+2. Що станеться, якщо видалити файл даних під час роботи програми?
+3. Навіщо вам інтерфейс `IExpenseStorage`, якщо реалізація одна?
+4. Покажіть місце, де програма могла б впасти, і поясніть, чому не падає.
+5. Чому тут `decimal`, а не `double`?
+6. Що робить `InvariantCulture` і що буде, якщо його прибрати?
+7. Який фрагмент коду ви переписували найбільше разів і чому?
+8. Що б ви зробили інакше, якби починали проєкт спочатку?
+
+:::danger Часта помилка
+Найгірший спосіб провалити захист — здати код, якого ви не розумієте.
+Викладач майже завжди ставить питання про **найскладніший** фрагмент
+роботи. Якщо ви взяли шматок із інтернету й не розібралися в ньому —
+краще замініть його простішим власним рішенням. Проста робоча програма,
+яку ви можете пояснити, оцінюється вище за складну незрозумілу.
+:::
+
+## Типові помилки
+
+**Тестувати лише «щасливий шлях».** Ввів коректну суму, коректну дату,
+усе спрацювало — і на цьому зупинився. Половина балів за валідацію
+втрачається на тому, чого автор жодного разу не спробував.
+
+**Рефакторити зламаний код.** Спочатку зробіть, щоб працювало, потім —
+щоб було гарно. Інакше ви ніколи не знатимете, чи то новий баг, чи старий.
+
+**Комітити `bin` і `obj`.** Репозиторій на 200 МБ, конфлікти в кожному
+файлі, і викладач не бачить за ними ваш код. `.gitignore` — перший файл
+у проєкті.
+
+**Один коміт «готова лабораторна».** Історія змін — це доказ вашої роботи
+й ваша страховка. Коміт після кожної завершеної частини.
+
+**Залишати закоментований код і `Console.WriteLine("тут")`.** Це видно
+одразу й псує враження про роботу. Прибирайте сміття перед останнім комітом.
+
+**README з одного рядка «Лабораторна робота 5».** Витратьте на README
+двадцять хвилин: це те, що читають першим, і те, що найдешевше зробити добре.

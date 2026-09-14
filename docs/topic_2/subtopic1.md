@@ -1,6 +1,6 @@
 ---
 sidebar_label: Загальні відомості
-sidebar_position: 0
+sidebar_position: 1
 ---
 
 # Загальні відомості про мову C#

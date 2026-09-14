@@ -2,120 +2,160 @@
 sidebar_position: 2
 ---
 
-# Абстрактні класи та інтерфейси
+# Операції з рядками
 
-Часто базовий клас настільки загальний, що створювати його екземпляр не має сенсу. Наприклад, об'єкт "Тварина" є абстрактним поняттям, тоді як "Собака" чи "Кіт" — конкретним. Для таких випадків використовуються абстрактні класи та інтерфейси.
+## Незмінність рядків (Immutability)
 
-## Абстрактні класи
-
-**Абстрактний клас** — це клас, об'єкт якого не можна створити. Він може містити як звичайні методи, так і абстрактні.
-
-- Оголошується ключовим словом `abstract class`.
-- **Абстрактний метод** (`abstract void Method();`) не має тіла реалізації в базовому класі.
-- Похідний клас **зобов'язаний** реалізувати всі абстрактні методи (через `override`), якщо він сам не є абстрактним.
+Важливо пам'ятати, що рядки в C# є **незмінними** (immutable). Це означає, що після створення об'єкта рядка його не
+можна змінити. Будь-яка операція, яка "змінює" рядок, насправді створює новий об'єкт рядка в пам'яті.
 
 ```csharp
-public abstract class Animal
+string s1 = "Hello";
+string s2 = s1; 
+s1 += " World"; // Створюється новий рядок "Hello World", s1 посилається на нього
+// s2 все ще посилається на старий рядок "Hello"
+```
+
+## Довжина рядка
+
+Властивість `Length` повертає кількість символів у рядку:
+
+```csharp
+string text = "C# Programming";
+int length = text.Length; // 14
+```
+
+## Доступ до символів
+
+До окремих символів рядка можна звертатися за індексом (як у масиві), але тільки для читання:
+
+```csharp
+string text = "Hello";
+char first = text[0]; // 'H'
+char last = text[text.Length - 1]; // 'o'
+
+// text[0] = 'h'; // Помилка компіляції! Рядки незмінні.
+```
+
+## Перебір символів
+
+Можна використовувати цикл `foreach` для перебору всіх символів рядка:
+
+```csharp
+string text = "Hello";
+foreach (char c in text)
 {
-    public string Name { get; set; }
-
-    // Звичайний метод (спільна логіка)
-    public void Sleep()
-    {
-        Console.WriteLine("Zzz...");
-    }
-
-    // Абстрактний метод (реалізація залежить від конкретної тварини)
-    public abstract void MakeSound();
-}
-
-public class Dog : Animal
-{
-    public override void MakeSound()
-    {
-        Console.WriteLine("Гав-гав!");
-    }
-}
-
-public class Cat : Animal
-{
-    public override void MakeSound()
-    {
-        Console.WriteLine("Мяу!");
-    }
+    Console.WriteLine(c);
 }
 ```
 
-## Інтерфейси
+## Конкатенація (Об'єднання)
 
-**Інтерфейс** — це контракт. Він визначає **що** повинен робити клас, але не **як**.
-
-- Оголошується ключовим словом `interface`.
-- Зазвичай імена інтерфейсів починаються з літери `I` (наприклад, `IMovable`, `IComparable`).
-- Клас може реалізовувати (успадковувати) **багато** інтерфейсів, але тільки один базовий клас.
-- Усі методи інтерфейсу за замовчуванням є `public` (до C# 8 не могли мати реалізації).
+Об'єднання рядків можна виконувати оператором `+` або методом `String.Concat`:
 
 ```csharp
-// Інтерфейс для об'єктів, що можуть рухатися
-public interface IMovable
-{
-    void Move(int speed);
-}
-
-// Інтерфейс для об'єктів, що мають інформацію
-public interface IDisplayable
-{
-    void DisplayInfo();
-}
-
-// Клас Car реалізує ДВА інтерфейси
-public class Car : IMovable, IDisplayable
-{
-    public string Model { get; set; }
-
-    public void Move(int speed)
-    {
-        Console.WriteLine($"Авто слідує зі швидкістю {speed} км/год");
-    }
-
-    public void DisplayInfo()
-    {
-        Console.WriteLine($"Модель авто: {Model}");
-    }
-}
+string s1 = "Hello";
+string s2 = "World";
+string res1 = s1 + " " + s2;
+string res2 = String.Concat(s1, " ", s2);
 ```
 
-## Абстрактний клас чи Інтерфейс?
+## Порівняння рядків
 
-| Характеристика         | Абстрактний клас                                                    | Інтерфейс                                                         |
-| :--------------------- | :------------------------------------------------------------------ | :---------------------------------------------------------------- |
-| **Ключове слово**      | `abstract class`                                                    | `interface`                                                       |
-| **Успадкування**       | Тільки один клас                                                    | Багато інтерфейсів                                                |
-| **Реалізація методів** | Може мати методи з кодом                                            | До C# 8 - ні, зараз - Default Interface Methods                   |
-| **Поля (змінні)**      | Може мати поля                                                      | Не може мати полів (тільки властивості)                           |
-| **Конструктор**        | Може мати конструктор                                               | Не може мати конструктора                                         |
-| **Призначення**        | "Is-a" (є чимось). Спільна функціональність для споріднених класів. | "Can-do" (може робити). Спільна поведінка для різнорідних класів. |
-
-### Приклад вибору
-
-- Якщо ми робимо гру про птахів: `Eagle`, `Penguin`, `Ostrich`.
-  - Створимо абстрактний клас `Bird` (бо всі вони птахи, мають крила, дзьоб).
-- Але пінгвін і страус не літають. А літак (`Airplane`) літає, хоч він і не птах.
-  - Створимо інтерфейс `IFlyable` з методом `Fly()`.
-  - `Eagle` : `Bird`, `IFlyable`
-  - `Penguin` : `Bird`
-  - `Airplane` : `Vehicle`, `IFlyable`
-
-Це дозволяє досягти гнучкості та поліморфізму:
+Для порівняння рядків не завжди достатньо `==`. Метод `Compare` та `Equals` дають більше контролю (наприклад,
+ігнорування регістру).
 
 ```csharp
-List<IFlyable> flyingObjects = new List<IFlyable>();
-flyingObjects.Add(new Eagle());
-flyingObjects.Add(new Airplane());
-// flyingObjects.Add(new Penguin()); // Помилка! Пінгвін не реалізує IFlyable
+string a = "apple";
+string b = "Apple";
 
-foreach (var obj in flyingObjects)
-{
-    obj.Fly(); // Спрацює для обох, хоча вони зовсім різні об'єкти
-}
+bool isEqual = (a == b); // false
+bool isSame = a.Equals(b, StringComparison.OrdinalIgnoreCase); // true
+
+int result = String.Compare(a, b); // повертає < 0, 0 або > 0
 ```
+
+## Пошук у рядку
+
+* `Contains(str)`: чи містить підрядок
+* `StartsWith(str)` / `EndsWith(str)`: чи починається/закінчується на підрядок
+* `IndexOf(str)`: індекс першого входження (або -1)
+* `LastIndexOf(str)`: індекс останнього входження
+
+```csharp
+string text = "Hello World";
+bool hasWorld = text.Contains("World"); // true
+int index = text.IndexOf("o"); // 4
+```
+
+## Виділення підрядків (Substring)
+
+Метод `Substring` дозволяє отримати частину рядка:
+
+```csharp
+string text = "Hello World";
+// Substring(startIndex, length)
+string sub = text.Substring(6, 5); // "World"
+// Substring(startIndex) - до кінця рядка
+string tail = text.Substring(6); // "World"
+```
+
+## Розділення та об'єднання (Split та Join)
+
+`Split` розбиває рядок на масив за роздільником, а `Join` об'єднує масив у рядок.
+
+```csharp
+string sentence = "C#,Java,Python,C++";
+string[] langs = sentence.Split(','); 
+// langs = ["C#", "Java", "Python", "C++"]
+
+string newSentence = String.Join(" | ", langs);
+// "C# | Java | Python | C++"
+```
+
+## Заміна та видалення (Replace, Remove, Trim)
+
+```csharp
+string text = "  Hello World  ";
+
+// Видалення пробілів на початку і в кінці
+string trimmed = text.Trim(); // "Hello World"
+
+// Заміна
+string replaced = text.Replace("World", "C#"); // "  Hello C#  "
+
+// Видалення частини рядка (startIndex, count)
+string removed = text.Remove(5); // "  Hel" (видаляє все починаючи з 5-го індексу)
+```
+
+## Перевірка на наявність підрядка
+
+Метод `Contains()` перевіряє, чи містить рядок певний підрядок.
+
+```csharp
+string sentence = "The quick brown fox";
+bool containsFox = sentence.Contains("fox");  // true
+```
+
+## Перевірка на порожність
+
+Методи `IsNullOrEmpty()` та `IsNullOrWhiteSpace()` допомагають визначити, чи є рядок порожнім або складається лише з
+пробілів.
+
+```csharp
+string empty = "";
+bool isEmpty = string.IsNullOrEmpty(empty);  // true
+
+string whiteSpace = "   ";
+bool isOnlyWhiteSpace = string.IsNullOrWhiteSpace(whiteSpace);  // true
+```
+
+## Форматування рядків
+
+Метод `String.Format()` дозволяє динамічно створювати рядки на основі шаблону.
+
+```csharp
+int value = 1234;
+string formatted = string.Format("Value is {0:N0}", value);  // "Value is 1,234"
+```
+
