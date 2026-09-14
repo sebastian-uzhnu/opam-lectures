@@ -58,7 +58,7 @@ Console.WriteLine($"7² = {result}"); // 49
 
 ## async void: коли можна використовувати
 
-`async void` — це спеціальний випадок, що **допустимий тільки для обробників подій** у WPF/WinForms:
+`async void` — це спеціальний випадок, що **допустимий тільки для обробників подій** у WPF/WPF:
 
 ```csharp
 // ПРАВИЛЬНО: обробник події кнопки
@@ -138,7 +138,7 @@ async Task<string> LibraryMethodAsync()
     return result.ToUpper();
 }
 
-// У WPF/WinForms коді (де потрібен UI-потік):
+// У WPF/WPF коді (де потрібен UI-потік):
 async void Button_Click(object sender, RoutedEventArgs e)
 {
     // Без ConfigureAwait(false) — після await знову UI-потік
@@ -149,7 +149,7 @@ async void Button_Click(object sender, RoutedEventArgs e)
 
 :::tip Коли використовувати ConfigureAwait(false)
 - **У бібліотечному коді** — завжди `ConfigureAwait(false)`, щоб не захоплювати контекст клієнта
-- **У WPF/WinForms обробниках подій** — **без** `ConfigureAwait(false)`, щоб повернутись на UI-потік для оновлення інтерфейсу
+- **У WPF/WPF обробниках подій** — **без** `ConfigureAwait(false)`, щоб повернутись на UI-потік для оновлення інтерфейсу
 :::
 
 ## Async методи у WPF: оновлення UI після await

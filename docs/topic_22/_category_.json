@@ -1,10 +1,10 @@
 {
-  "label": "Тема 22. Елементи керування та контейнери",
+  "label": "Тема 22. Елементи керування, стилі та ресурси",
   "position": 22,
   "link": {
     "type": "generated-index",
-    "slug": "windows-forms-controls-containers",
-    "title": "Елементи керування та контейнери",
-    "description": "Основні елементи управління: Button, TextBox, Label, RichTextBox, CheckBox, RadioButton. Контейнери GroupBox, Panel, TabControl. Використання елементів «дерево» та «таблиця». Властивості прив’язки та вирівнювання елементів. Обробка подій миші та клавіатури. Підключення обробників подій до елементів керування для інтеграції бізнес-логіки."
+    "slug": "wpf-controls-styles",
+    "title": "Елементи керування, стилі та ресурси",
+    "description": "Основні елементи керування WPF: Button, TextBox, TextBlock, Label, CheckBox, RadioButton, ComboBox, ListBox, Slider, ProgressBar, DatePicker. Властивості залежності (dependency properties) та їх відмінність від звичайних властивостей. Маршрутизовані події: тунельні та висхідні, зупинка поширення події. Контейнери та групування елементів: GroupBox, Expander, TabControl, ScrollViewer, Border. Ресурси застосунку: StaticResource, DynamicResource, словники ресурсів. Стилі, тригери та шаблони елементів керування. Оформлення інтерфейсу: кисті, градієнти, шрифти, теми."
   }
 }
