@@ -95,16 +95,6 @@ const config: Config = {
           label: 'Лекції',
         },
         {
-          href: 'https://t.me/sebii_sw',
-          label: 'Telegram',
-          position: 'right',
-        },
-        {
-          href: 'https://instagram.com/sebii_sw',
-          label: 'Instagram',
-          position: 'right',
-        },
-        {
           href: 'https://github.com/sebastian-uzhnu',
           label: 'GitHub',
           position: 'right',
@@ -117,10 +107,6 @@ const config: Config = {
         {
           title: 'Соціальні мережі',
           items: [
-            {
-              label: 'Instagram',
-              href: 'https://instagram.com/sebii_sw',
-            },
             {
               label: 'GitHub',
               href: 'https://github.com/sebastian-uzhnu',
