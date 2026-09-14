@@ -84,12 +84,12 @@ namespace EventExample
 }
 ```
 
-## Події у WinForms та WPF
+## Події у WPF та WPF
 
 У графічних інтерфейсах (GUI) події є основним механізмом взаємодії. Наприклад, натискання кнопки генерує подію `Click`.
 
 ```csharp
-// Приклад у WinForms
+// Приклад у WPF
 Button myButton = new Button();
 myButton.Text = "Click Me";
 
