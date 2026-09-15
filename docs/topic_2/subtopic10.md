@@ -1,5 +1,6 @@
 ---
-sidebar_position: 3
+sidebar_label: Збірки та простори імен
+sidebar_position: 10
 ---
 
 # Збірки та простори імен

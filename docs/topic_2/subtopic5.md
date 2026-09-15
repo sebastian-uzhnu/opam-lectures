@@ -1,4 +1,5 @@
 ---
+sidebar_label: Операції та класифікація даних
 sidebar_position: 5
 ---
 

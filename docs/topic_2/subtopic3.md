@@ -1,4 +1,5 @@
 ---
+sidebar_label: Алфавіт і синтаксис
 sidebar_position: 3
 ---
 

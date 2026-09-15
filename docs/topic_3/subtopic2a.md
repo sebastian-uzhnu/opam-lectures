@@ -1,4 +1,5 @@
 ---
+sidebar_label: Області видимості
 sidebar_position: 3
 ---
 

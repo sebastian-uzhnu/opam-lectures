@@ -1,4 +1,5 @@
 ---
+sidebar_label: Структура програми
 sidebar_position: 4
 ---
 
