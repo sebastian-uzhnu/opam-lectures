@@ -1,18 +1,53 @@
 /**
- * Створення самостійної роботи №1 у Google Forms.
+ * Самостійна робота №1 у Google Forms з передачею оцінок у Google Classroom.
  * Теми 1-3: алгоритмізація · основи мови C# · змінні і типи даних.
+ * 39 питань, 100 балів, 4 рівні складності.
  *
- * ЯК ЗАПУСТИТИ (одноразово, приблизно дві хвилини):
- *   1. Відкрийте script.google.com і натисніть «Новий проєкт».
- *   2. Видаліть увесь код у редакторі та вставте замість нього цей файл.
- *   3. Угорі оберіть функцію createQuiz і натисніть «Виконати».
- *   4. Перший запуск попросить дозвіл на створення форм — погодьтесь.
- *   5. У панелі «Журнал виконання» з'являться два посилання:
- *      одне для редагування форми, друге — для студентів.
+ * ─────────────────────────────────────────────────────────────────────────
+ *  ШЛЯХ А — РЕКОМЕНДОВАНИЙ, якщо потрібні оцінки в Classroom
+ * ─────────────────────────────────────────────────────────────────────────
+ *  1. У Classroom: Завдання -> Створити -> Завдання з тестом.
+ *     Classroom сам створить порожню форму «Blank Quiz» і прикріпить її.
+ *  2. Увімкніть перемикач «Імпорт оцінок» і збережіть завдання як чернетку.
+ *  3. Відкрийте цю порожню форму, скопіюйте її адресу з рядка браузера.
+ *  4. script.google.com -> Новий проєкт -> вставте цей файл.
+ *  5. Впишіть адресу форми у змінну FORM_URL нижче.
+ *  6. Оберіть функцію fillClassroomQuiz і натисніть «Виконати».
+ *  7. Поверніться в Classroom і опублікуйте завдання.
  *
- * Форма створюється у вашому Google Диску, у кореневій теці.
- * Бали за кожне питання виставляються автоматично.
+ *  Важливо: не змінюйте налаштування завдання після публікації —
+ *  Classroom може перестати бачити оцінки.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *  ШЛЯХ Б — проста форма без Classroom
+ * ─────────────────────────────────────────────────────────────────────────
+ *  Оберіть функцію createQuiz і натисніть «Виконати».
+ *  Форма створиться у кореневій теці вашого Диска, посилання з'являться
+ *  у панелі «Журнал виконання».
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *  ЩО ПОТРІБНО ДЛЯ ІМПОРТУ ОЦІНОК (вимоги Google)
+ * ─────────────────────────────────────────────────────────────────────────
+ *  • форма має бути тестом — скрипт це вмикає;
+ *  • форма має збирати адреси пошти — скрипт це вмикає;
+ *  • одна відповідь від студента — скрипт це вмикає;
+ *  • форма має бути ЄДИНИМ вкладенням у завданні;
+ *  • викладач і студенти мають бути в одному домені Google Workspace
+ *    for Education. На звичайних акаунтах @gmail.com імпорт оцінок
+ *    не працює — форму доведеться перевіряти вручну.
+ *
+ *  П'ять відкритих питань Google перевірити сам не може. Спочатку
+ *  виставте за них бали у формі (вкладка «Відповіді»), і лише потім
+ *  тисніть «Імпортувати оцінки» в Classroom — інакше підтягнуться
+ *  тільки бали за питання з вибором.
  */
+
+// Адреса порожньої форми, яку створив Classroom. Потрібна лише для шляху А.
+var FORM_URL = 'ВСТАВТЕ_СЮДИ_АДРЕСУ_ФОРМИ';
+
+// Додавати поля «Прізвище» та «Група»?
+// Для шляху А не треба: Classroom і так знає, хто відповідав.
+var ADD_NAME_FIELDS = false;
 
 var DATA = [
   {
@@ -548,38 +583,83 @@ var INTRO =
   'Питання вищого рівня коштують більше балів.\n\n' +
   'Шкала: 90-100 — відмінно, 74-89 — добре, 60-73 — задовільно, менше 60 — незадовільно.';
 
+// ── Шлях А: наповнити форму, створену Classroom ──────────────────────────────
+function fillClassroomQuiz() {
+  var id = extractFormId(FORM_URL);
+  if (!id) {
+    throw new Error('Впишіть адресу форми у змінну FORM_URL угорі файлу.');
+  }
+  var form = FormApp.openById(id);
+
+  // прибрати те, що Classroom поклав у порожню форму
+  var existing = form.getItems();
+  for (var k = existing.length - 1; k >= 0; k--) {
+    form.deleteItem(existing[k]);
+  }
+
+  buildForm(form);
+  Logger.log('Форму наповнено. Поверніться в Classroom і опублікуйте завдання.');
+  Logger.log('Форма: ' + form.getEditUrl());
+}
+
+// ── Шлях Б: створити нову форму з нуля ───────────────────────────────────────
 function createQuiz() {
   var form = FormApp.create(TITLE);
+  buildForm(form);
+  Logger.log('ГОТОВО. Питань: 39, балів: 100.');
+  Logger.log('Редагувати форму: ' + form.getEditUrl());
+  Logger.log('Посилання для студентів: ' + form.getPublishedUrl());
+}
+
+// ── спільна побудова ─────────────────────────────────────────────────────────
+function buildForm(form) {
+  form.setTitle(TITLE);
   form.setDescription(INTRO);
   form.setIsQuiz(true);
   form.setProgressBar(true);
   form.setAllowResponseEdits(false);
-  form.setLimitOneResponsePerUser(false);
 
-  // ── хто відповідає ────────────────────────────────────────────────────────
-  form.addTextItem()
-      .setTitle('Прізвище та ім\'я')
-      .setRequired(true);
-  form.addTextItem()
-      .setTitle('Група')
-      .setRequired(true);
+  // три налаштування, без яких Classroom не імпортує оцінки
+  applySetting(form, 'збір адрес пошти', function () {
+    try {
+      form.setEmailCollectionType(FormApp.EmailCollectionType.VERIFIED);
+    } catch (inner) {
+      form.setCollectEmail(true);   // старіший варіант API
+    }
+  });
+  applySetting(form, 'одна відповідь від студента', function () {
+    form.setLimitOneResponsePerUser(true);
+  });
+  applySetting(form, 'вхід лише для свого домену', function () {
+    form.setRequireLogin(true);
+  });
 
-  // ── питання за рівнями ────────────────────────────────────────────────────
+  if (ADD_NAME_FIELDS) {
+    form.addTextItem().setTitle('Прізвище та ім\'я').setRequired(true);
+    form.addTextItem().setTitle('Група').setRequired(true);
+  }
+
   for (var s = 0; s < DATA.length; s++) {
     var level = DATA[s];
-
     form.addPageBreakItem()
         .setTitle(level.title + ' — по ' + level.points + ' б. за питання')
         .setHelpText(level.desc);
-
     for (var i = 0; i < level.items.length; i++) {
       addQuestion(form, level.items[i]);
     }
   }
+}
 
-  Logger.log('ГОТОВО. Питань: 39, балів: 100.');
-  Logger.log('Редагувати форму: ' + form.getEditUrl());
-  Logger.log('Посилання для студентів: ' + form.getPublishedUrl());
+// Деякі налаштування недоступні на особистих акаунтах @gmail.com —
+// тоді просто пишемо попередження в журнал, а не валимо весь скрипт.
+function applySetting(form, name, fn) {
+  try {
+    fn();
+  } catch (e) {
+    Logger.log('УВАГА: не вдалося увімкнути «' + name + '». ' +
+               'Найімовірніше, це особистий акаунт, а не Workspace for Education. ' +
+               'Імпорт оцінок у Classroom тоді не працюватиме.');
+  }
 }
 
 function addQuestion(form, q) {
@@ -608,9 +688,15 @@ function addQuestion(form, q) {
     cb.setFeedbackForIncorrect(feedback);
 
   } else {
-    // відкрите питання: бали виставляються вручну під час перевірки
+    // відкрите питання: бали виставляє викладач у вкладці «Відповіді»
     var oe = form.addParagraphTextItem();
     oe.setTitle(q.text).setPoints(q.points).setRequired(true);
     oe.setGeneralFeedback(feedback);
   }
+}
+
+function extractFormId(url) {
+  if (!url || url.indexOf('ВСТАВТЕ') === 0) return null;
+  var m = url.match(/[-\w]{25,}/);
+  return m ? m[0] : null;
 }
