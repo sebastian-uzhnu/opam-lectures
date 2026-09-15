@@ -89,7 +89,7 @@ parallelProcessor.Complete();
 await parallelProcessor.Completion;
 ```
 
-:::tip Post vs SendAsync
+:::tip[Post vs SendAsync]
 `Post()` — синхронний, повертає `false` якщо черга повна (`BoundedCapacity`). `SendAsync()` — асинхронний, чекає до звільнення місця в черзі. Для надійної роботи з `BoundedCapacity` використовуйте `SendAsync`.
 :::
 
@@ -197,7 +197,7 @@ broadcaster.Post("Користувач увійшов у систему");
 broadcaster.Post("Помилка авторизації");
 ```
 
-:::warning BroadcastBlock і втрата даних
+:::warning[BroadcastBlock і втрата даних]
 `BroadcastBlock` зберігає лише **останній** елемент. Якщо підключений блок ще обробляє попередній елемент, новий елемент може бути пропущений. Для гарантованої доставки використовуйте `BufferBlock` після `BroadcastBlock`.
 :::
 
@@ -279,7 +279,7 @@ await block3.Completion;
 Console.WriteLine("Конвеєр завершив роботу");
 ```
 
-:::danger Завжди чекайте Completion
+:::danger[Завжди чекайте Completion]
 Без `await block.Completion` програма може завершитись до того, як блок обробить всі елементи. Також завжди використовуйте `PropagateCompletion = true` — інакше підключені блоки ніколи не завершаться.
 :::
 

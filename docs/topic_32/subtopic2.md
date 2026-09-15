@@ -77,7 +77,7 @@ async void BadMethod() // Небезпечно!
 }
 ```
 
-:::warning Небезпека async void
+:::warning[Небезпека async void]
 Якщо в `async void` методі виникне необроблений виняток — він **не може бути перехоплений** з місця виклику і призведе до аварійного завершення програми. Використовуйте `async void` **тільки** для обробників подій.
 :::
 
@@ -147,7 +147,7 @@ async void Button_Click(object sender, RoutedEventArgs e)
 }
 ```
 
-:::tip Коли використовувати ConfigureAwait(false)
+:::tip[Коли використовувати ConfigureAwait(false)]
 - **У бібліотечному коді** — завжди `ConfigureAwait(false)`, щоб не захоплювати контекст клієнта
 - **У WPF/WPF обробниках подій** — **без** `ConfigureAwait(false)`, щоб повернутись на UI-потік для оновлення інтерфейсу
 :::
@@ -349,7 +349,7 @@ private async void Button_Click(object sender, RoutedEventArgs e)
                    ∞
 ```
 
-:::warning Правило: ніколи не блокуй асинхронний код
+:::warning[Правило: ніколи не блокуй асинхронний код]
 У WPF та ASP.NET **ніколи** не викликайте `.Result`, `.Wait()` або `.GetAwaiter().GetResult()` на `Task` у контексті UI або request-потоку. Завжди використовуйте `await`.
 
 Єдиний безпечний виняток — консольний застосунок (без `SynchronizationContext`) або фоновий потік із `ConfigureAwait(false)` у всьому ланцюжку.

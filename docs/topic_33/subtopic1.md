@@ -41,7 +41,7 @@ var resultPar = numbers
     .ToList();
 ```
 
-:::info Де ставити AsParallel()
+:::info[Де ставити AsParallel()]
 `AsParallel()` викликається на вхідній колекції, до перших операторів LINQ. Всі подальші оператори (Where, Select, GroupBy тощо) автоматично виконуються паралельно.
 :::
 
@@ -121,7 +121,7 @@ var ordered = data
 // Завжди: [1, 4, 9, 16, 25, ...]
 ```
 
-:::warning Ціна AsOrdered()
+:::warning[Ціна AsOrdered()]
 `AsOrdered()` змушує PLINQ синхронізувати результати між потоками, що збільшує накладні витрати. Використовуйте лише коли порядок дійсно важливий. Якщо порядок потрібен лише у кінці — краще додати `OrderBy` після збору результатів.
 :::
 
@@ -140,7 +140,7 @@ numbers
     .ForAll(n => SaveToDb(n));  // виконується паралельно без зайвих алокацій
 ```
 
-:::info ForAll vs foreach
+:::info[ForAll vs foreach]
 `ForAll` не повертає значення і не зберігає порядок. Він ідеальний для фінальних side-effect операцій (запис у базу, файл тощо), де порядок не важливий.
 :::
 
@@ -226,7 +226,7 @@ var tasks = fileNames.Select(f => File.ReadAllTextAsync(f));
 var contents2 = await Task.WhenAll(tasks);
 ```
 
-:::warning Малі колекції
+:::warning[Малі колекції]
 PLINQ не варто використовувати для колекцій менше кількох тисяч елементів — overhead розбивки і злиття нівелює будь-яке прискорення.
 :::
 
@@ -263,7 +263,7 @@ catch (AggregateException ae)
 }
 ```
 
-:::info AggregateException.Flatten()
+:::info[AggregateException.Flatten()]
 Якщо AggregateException містить вкладені AggregateException (таке трапляється при вкладених паралельних операціях), метод `Flatten()` розгортає їх в єдиний плоский список.
 :::
 

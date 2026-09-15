@@ -87,11 +87,11 @@ class SingleInstanceApp
 }
 ```
 
-:::tip Префікс "Global\\"
+:::tip[Префікс "Global\\"]
 Префікс `Global\\` робить Mutex видимим для всіх сесій Windows (включно з різними користувачами). Без префіксу Mutex існує лише в межах поточної сесії.
 :::
 
-:::warning Mutex vs lock — що вибрати?
+:::warning[Mutex vs lock — що вибрати?]
 - Якщо вам потрібна синхронізація лише між потоками **одного процесу** — завжди використовуйте `lock`. Він набагато швидший (мікросекунди проти мілісекунд).
 - `Mutex` має сенс лише коли потрібна **між-процесна** синхронізація.
 :::
@@ -182,7 +182,7 @@ class RateLimiter
 }
 ```
 
-:::tip `WaitAsync()` vs `Wait()`
+:::tip[`WaitAsync()` vs `Wait()`]
 У асинхронному коді (`async/await`) завжди використовуйте `_semaphore.WaitAsync()`, а не `_semaphore.Wait()`. Синхронний `Wait()` блокує **потік** (Thread Pool), а `WaitAsync()` лише призупиняє **coroutine**, звільняючи потік для іншої роботи.
 :::
 
@@ -314,7 +314,7 @@ class CacheWithUpgrade
 }
 ```
 
-:::info Upgradeable vs Read Lock
+:::info[Upgradeable vs Read Lock]
 Одночасно може бути лише **один** `UpgradeableReadLock`, але поряд із ним можуть працювати звичайні читачі. Це запобігає deadlock: якщо два потоки одночасно спробують підвищитись до WriteLock, лише один отримає його.
 :::
 

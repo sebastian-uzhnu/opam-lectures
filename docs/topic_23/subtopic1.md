@@ -49,7 +49,7 @@ public partial class AddContactWindow : Window
 }
 ```
 
-:::warning Обережно
+:::warning[Обережно]
 У списку Add є дуже схожі пункти: `Window (WPF)`, `Page (WPF)` і
 `User Control (WPF)`. Для діалогу потрібне саме **Window** — тільки воно
 має методи `Show`/`ShowDialog`. `Page` знадобиться нам у підрозділі
@@ -116,7 +116,7 @@ public partial class AddContactWindow : Window
                                    + вікно закривається
 ```
 
-:::tip Порада
+:::tip[Порада]
 Будь-який діалог має бути прохідним з клавіатури: Tab між полями, Enter —
 підтвердити, Esc — скасувати. Дві властивості в XAML, а користувачі,
 які не люблять мишу, будуть вам вдячні.
@@ -186,7 +186,7 @@ dlg.Owner = this;
 dlg.ShowDialog();
 ```
 
-:::info Цікаво
+:::info[Цікаво]
 Конструкція `public AddContactWindow(string name, string phone) : this()`
 називається **ланцюжком конструкторів**. Запис `: this()` означає
 «спочатку виконай конструктор без параметрів, потім моє тіло».
@@ -249,7 +249,7 @@ if (dlg.ShowDialog() == true && dlg.CreatedContact is not null)
 }
 ```
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Читати `dlg.CreatedContact` після `dlg.Show()` — безглуздо. `Show()` не
 чекає: наступний рядок виконається, коли користувач ще навіть не встиг
 клацнути в поле. Властивість буде `null`, і студент півгодини шукає,
@@ -349,7 +349,7 @@ private void OnSearchRequested(object? sender, string query)
 }
 ```
 
-:::tip Порада
+:::tip[Порада]
 Зверніть увагу на `searchWindow.Closed += (s, args) => searchWindow = null;`.
 Без цього рядка після закриття вікна змінна й далі вказує на мертвий об'єкт,
 а повторний `Show()` на закритому вікні кидає `InvalidOperationException`:

@@ -616,7 +616,7 @@ namespace FileDownloader
 }
 ```
 
-:::info Чому HttpCompletionOption.ResponseHeadersRead?
+:::info[Чому HttpCompletionOption.ResponseHeadersRead?]
 За замовчуванням `GetAsync` читає **всю** відповідь у пам'ять перш ніж повернути контроль. З `ResponseHeadersRead` ми отримуємо відповідь одразу після заголовків, а тіло читаємо порціями через stream — це дозволяє відстежувати прогрес завантаження і не завантажувати великі файли цілком у RAM.
 :::
 
@@ -674,7 +674,7 @@ progress.Report(percent); // Автоматичний маршалінг на UI
 | **Дедлок ризик** | Низький | Низький | Є (.Result у WPF) | Низький (якщо async all the way) |
 | **Коли використовувати** | Рідко (legacy, LongRunning) | Рідко (QueueUserWorkItem) | Паралельні обчислення | Весь сучасний async-код |
 
-:::tip Золоте правило вибору
+:::tip[Золоте правило вибору]
 - Потрібен просто фоновий потік без результату → `Task.Run`
 - Потрібен результат → `Task<T>` + `await`
 - Потрібно кілька паралельних операцій → `Task.WhenAll`

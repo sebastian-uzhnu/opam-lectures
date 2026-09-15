@@ -163,7 +163,7 @@ private void RecalculateTotals()
 }
 ```
 
-:::tip Порада
+:::tip[Порада]
 Рахуйте підсумки по `ICollectionView`, а не по `ObservableCollection`.
 Тоді ввімкнений фільтр автоматично впливає на числа: обрали категорію
 «Десерти» — і внизу сума саме по десертах. Якщо рахувати по колекції,
@@ -275,7 +275,7 @@ public partial class CafeViewModel : ViewModelBase
 }
 ```
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Метод `Clear()` у `ObservableCollection` кидає подію з дією `Reset`,
 у якій `OldItems` дорівнює `null`. Тобто наведений вище код **не відпише**
 старі елементи, і вони залишаться в пам'яті назавжди.
@@ -293,7 +293,7 @@ private void ClearOrders()
 ```
 :::
 
-:::warning Обережно
+:::warning[Обережно]
 Не викликайте `OrdersView.Refresh()` на **кожну** зміну властивості.
 Якщо користувач саме редагує комірку, а ви перебудовуєте подання, рядок
 може «втекти» з-під курсора або взагалі зникнути через фільтр — редагування
@@ -542,7 +542,7 @@ private static string EscapeCsv(string? value)
 }
 ```
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Експорт «в один рядок»:
 
 ```csharp
@@ -572,7 +572,7 @@ var priceText = order.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture);
 var timeText  = order.Time.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 ```
 
-:::info Цікаво
+:::info[Цікаво]
 Роздільник у CSV взагалі не обов'язково кома. Excel в українській та
 більшості європейських локалізацій очікує **крапку з комою**, бо кома там
 зайнята під десятковий розділювач. Тому для файлів, які відкриватимуть
@@ -603,7 +603,7 @@ var timeText  = order.Time.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCul
 Excel: "РљР°РїСѓС‡РёРЅРѕ"          Excel: "Капучино"
 ```
 
-:::warning Обережно
+:::warning[Обережно]
 У .NET 8 конструктор `new StreamWriter(path)` записує UTF-8 **без BOM**.
 Це свідома зміна порівняно зі старим .NET Framework, і саме через неї
 студентські експорти відкриваються кракозябрами. Щоб BOM з'явився,
@@ -712,7 +712,7 @@ public partial class CafeViewModel
 бачить 12 рядків із 80 і натискає «Експорт». Він очікує у файлі саме ці 12.
 Якщо експортувати всю колекцію, це сприймається як помилка програми.
 
-:::tip Порада
+:::tip[Порада]
 `SaveFileDialog` живе у просторі імен `Microsoft.Win32` — це той самий
 клас, що ви бачили в темі 23. Якщо автодоповнення пропонує варіант з
 іншого простору імен, оберіть саме `Microsoft.Win32`.

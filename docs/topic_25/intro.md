@@ -73,7 +73,7 @@ sidebar_position: 1
 | `SelectedValuePath` | яку властивість обраного об'єкта вважати «значенням» |
 | `SelectedValue` | саме це значення (наприклад, `Id`, а не весь об'єкт) |
 
-:::warning Обережно
+:::warning[Обережно]
 `ItemsSource` і ручне додавання в `Items` — це «або-або». Щойно ви задали
 `ItemsSource`, колекція `Items` стає доступною тільки для читання, і виклик
 `Items.Add(...)` кине виняток `InvalidOperationException`. Хочете змінити
@@ -192,13 +192,13 @@ public class GroupViewModel : ViewModelBase
 }
 ```
 
-:::info Цікаво
+:::info[Цікаво]
 Запис `= [ ... ]` — це **collection expression** з C# 12. Раніше довелося б
 писати `new ObservableCollection<Student> { ... }`. Компілятор сам розуміє,
 яку колекцію створити, бо бачить тип властивості.
 :::
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Якщо зробити `public List<Student> Students { get; } = [...]`, список
 намалюється, але **не оновлюватиметься**. `List` не вміє повідомляти інтерфейс
 про додавання й видалення елементів. Для колекції, яка змінюється під час
@@ -243,7 +243,7 @@ public class GroupViewModel : ViewModelBase
 І саме тому його беруть, коли вибір не потрібен: він найлегший і не малює
 зайвого.
 
-:::tip Порада
+:::tip[Порада]
 Якщо елементів багато, загорніть `ItemsControl` у `ScrollViewer` —
 сам він прокручування не має, на відміну від `ListBox`.
 :::
@@ -305,7 +305,7 @@ public class GroupViewModel : ViewModelBase
 | `Multiple` | клік додає елемент до вибраних, повторний клік знімає |
 | `Extended` | як у Провіднику: Ctrl — додати, Shift — діапазон |
 
-:::warning Обережно
+:::warning[Обережно]
 При множинному виборі обрані елементи лежать у `SelectedItems` (з `s` на кінці),
 і це **не** властивість залежності — прив'язати її до моделі подання
 напряму не вийде. Найпростіше рішення для MVVM: додати в кожен елемент
@@ -371,7 +371,7 @@ public class GroupViewModel : ViewModelBase
 додати рядок користувач не може. `ListView` — це список, який просто гарно
 вирівняний у колонки.
 
-:::info Цікаво
+:::info[Цікаво]
 `GridViewColumn` має дві схожі властивості: `DisplayMemberBinding` (просто текст)
 і `CellTemplate` (довільний вміст комірки). Якщо задати обидві, виграє
 `DisplayMemberBinding` — шаблон буде проігноровано. Це класична пастка:
@@ -479,7 +479,7 @@ public class GroupViewModel : ViewModelBase
 Тепер у `SelectedLastName` (тип `string`) потрапить лише прізвище, а не весь
 об'єкт `Student`.
 
-:::tip Порада
+:::tip[Порада]
 Властивість `IsEditable="True"` перетворює `ComboBox` на поле з підказками:
 користувач може і обрати зі списку, і ввести свій текст. Разом з
 `IsTextSearchEnabled="True"` це дає звичний «автодоповнювач».
@@ -577,7 +577,7 @@ public class GroupViewModel : ViewModelBase
 2. `SetProperty` викликав `OnPropertyChanged`;
 3. `ListBox` слухає `PropertyChanged` кожного елемента і перемальовує рядок.
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Якщо модель `Student` не реалізує `INotifyPropertyChanged`, редагування
 в правій панелі «мовчки» не оновить список зліва. Дані в об'єкті зміняться,
 а на екрані лишиться старий текст — і студент півгодини шукає помилку
@@ -597,7 +597,7 @@ public class GroupViewModel : ViewModelBase
 інші дані. Панель, яка це вміє, називається `VirtualizingStackPanel`, і в
 `ListBox`, `ListView`, `DataGrid` та `ComboBox` вона стоїть за замовчуванням.
 
-:::warning Обережно
+:::warning[Обережно]
 Віртуалізацію легко зламати випадково. Вона вимикається, якщо: замінити
 `ItemsPanel` на `WrapPanel` чи `StackPanel`; загорнути список у `ScrollViewer`
 з `VerticalScrollBarVisibility="Disabled"` (тоді список отримує нескінченну

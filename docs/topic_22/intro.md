@@ -45,7 +45,7 @@ sidebar_position: 1
 `TextBlock`, `TextBox`, `PasswordBox`. Вони не ContentControl — у них не можна
 покласти картинку замість рядка.
 
-:::info Цікаво
+:::info[Цікаво]
 `TextBlock` узагалі не є `Control`. Він успадковується напряму від `FrameworkElement`
 і тому не має ні рамки, ні шаблону, ні фокуса введення. Це зроблено навмисно:
 підписів у вікні бувають сотні, і кожен зайвий кілобайт на підпис — це пам'ять
@@ -185,7 +185,7 @@ public partial class TextWindow : Window
   Це не те саме, що `IsEnabled="False"`: вимкнений елемент сірий і з нього
   не можна скопіювати текст.
 
-:::warning Обережно
+:::warning[Обережно]
 `PasswordBox.Password` — це **не** dependency property (про них у наступному
 підрозділі), і зроблено це навмисно: щоб пароль не «осідав» у системі
 властивостей і не потрапляв у прив'язки. Тому пароль завжди читають
@@ -464,14 +464,14 @@ public partial class ChoiceWindow : Window
 Разом: 3740,00 грн
 ```
 
-:::tip Порада
+:::tip[Порада]
 Якщо не хочете перевизначати `ToString` (наприклад, клас чужий), скажіть
 списку, яку властивість показувати, через `DisplayMemberPath`:
 `ProductListBox.DisplayMemberPath = "Name";`. Це теж не Binding —
 просто рядок з іменем властивості.
 :::
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 `IsChecked` має тип `bool?`, а не `bool`. Запис `if (GiftWrapCheck.IsChecked)`
 не компілюється. Пишіть `if (GiftWrapCheck.IsChecked == true)` — і тоді
 невизначений стан `null` коректно потрапить у гілку «ні».
@@ -604,7 +604,7 @@ public partial class NumbersWindow : Window
 Період: 14.09.2026 — 14.09.2027
 ```
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 Обробник `ValueChanged` у `Slider` спрацьовує **під час створення вікна**,
 коли XAML присвоює початкове значення `Value="5000"`. У цей момент
 `InitializeComponent` ще не дійшов до наступних елементів, і звертання

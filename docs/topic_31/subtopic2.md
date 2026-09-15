@@ -49,7 +49,7 @@ protected override void OnModelCreating(ModelBuilder mb)
 }
 ```
 
-:::info OnDelete поведінка
+:::info[OnDelete поведінка]
 | Значення | Поведінка при видаленні батька |
 |---|---|
 | `SetNull` | Зовнішній ключ стає `NULL` |
@@ -254,6 +254,6 @@ protected override void OnModelCreating(ModelBuilder mb)
 }
 ```
 
-:::warning Id у HasData
+:::warning[Id у HasData]
 При використанні `HasData` первинний ключ `Id` **обов'язковий** навіть для автоінкрементних полів, бо EF Core потребує стабільного ідентифікатора для відстеження seed-даних між міграціями.
 :::

@@ -91,7 +91,7 @@ public class Product : ViewModelBase
 }
 ```
 
-:::tip Порада
+:::tip[Порада]
 Для грошей беріть `decimal`, а не `double`. `double` зберігає число
 у двійковій системі, і `0.1 + 0.2` там дорівнює `0.30000000000000004`.
 У бухгалтерії таке неприпустимо. `decimal` рахує в десятковій системі
@@ -132,7 +132,7 @@ public class Product : ViewModelBase
 і задають стовпці вручну. Автогенерація лишається тим, чим є: способом
 за п'ять секунд подивитися, які дані взагалі приїхали.
 
-:::info Цікаво
+:::info[Цікаво]
 Приховати окрему властивість від автогенерації можна атрибутом
 `[Browsable(false)]` з простору імен `System.ComponentModel`,
 а перейменувати заголовок — атрибутом `[DisplayName("Ціна")]`.
@@ -208,7 +208,7 @@ public class Product : ViewModelBase
 </DataGridComboBoxColumn>
 ```
 
-:::warning Обережно
+:::warning[Обережно]
 `DataGridComboBoxColumn` — не звичайний елемент у візуальному дереві, він
 живе окремо і **не успадковує `DataContext`** вікна. Тому прив'язка
 `ItemsSource="{Binding Categories}"` на ньому просто не спрацює: у вікні
@@ -325,7 +325,7 @@ public class Product : ViewModelBase
 | `*` | забрати весь вільний простір |
 | `2*` | удвічі більше, ніж сусідній `*` |
 
-:::warning Обережно
+:::warning[Обережно]
 `Width="Auto"` на таблиці з десятками тисяч рядків вимикає переваги
 віртуалізації по горизонталі: щоб порахувати ширину, `DataGrid` мусить
 виміряти вміст усіх рядків. На великих обсягах ставте конкретні числа
@@ -391,7 +391,7 @@ public class Product : ViewModelBase
 | `SelectionUnit` | `FullRow` / `Cell` / `CellOrRowHeader` | що саме виділяється кліком |
 | `SelectionMode` | `Single` / `Extended` | один рядок чи кілька |
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 `CanUserAddRows="True"` мовчки не працює, якщо в класу елемента немає
 **публічного конструктора без параметрів** — `DataGrid` просто не показує
 рядок-заповнювач. Так само він не працює, якщо `ItemsSource` прив'язано
@@ -621,7 +621,7 @@ public class Product : ViewModelBase, IDataErrorInfo
        RowValidationErrorTemplate
 ```
 
-:::warning Обережно
+:::warning[Обережно]
 Валідація рядка через `IDataErrorInfo.Error` спрацьовує тільки тоді, коли
 `DataGrid` бачить у джерелі рядок як `IEditableObject` або коли ви
 прив'язали хоча б один стовпець із `ValidatesOnDataErrors=True`.
@@ -669,7 +669,7 @@ public class Product : ViewModelBase, IDataErrorInfo
 правило «якщо `IsExpired` дорівнює `True` — фарбуй у рожеве» описується
 повністю декларативно, без жодного рядка C#.
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 `AlternatingRowBackground` і `Background` із `DataTrigger` конфліктують:
 локальне значення чергування має вищий пріоритет, ніж сетер у стилі,
 і ваш червоний рядок може не з'явитися. Якщо так сталося — приберіть
