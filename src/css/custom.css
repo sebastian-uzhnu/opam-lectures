@@ -1,30 +1,386 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles for the OPAM course site.
+ *
+ * Design direction: "engineering notebook". The subject is C#/.NET taught in
+ * 35 numbered topics, so structure carries information — topic numbers are a
+ * real sequence, and code is the subject matter rather than an accent.
+ *
+ * Typography is loaded in a <link> from docusaurus.config.ts so the fonts are
+ * preconnected and do not block first paint.
  */
 
-/* You can override the default Infima variables here. */
+/* ---------------------------------------------------------------- tokens - */
+
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  /* Blueprint blue: a drafting/technical hue, readable on paper white. */
+  --ifm-color-primary: #1f5c8b;
+  --ifm-color-primary-dark: #1c537d;
+  --ifm-color-primary-darker: #1a4e76;
+  --ifm-color-primary-darkest: #164061;
+  --ifm-color-primary-light: #226599;
+  --ifm-color-primary-lighter: #246aa0;
+  --ifm-color-primary-lightest: #2a7cba;
+
+  --opam-ink: #141a1f;
+  --opam-ink-soft: #46535f;
+  --opam-paper: #fbfaf8;
+  --opam-surface: #ffffff;
+  --opam-rule: #e3e0da;
+  --opam-rule-strong: #cfcbc3;
+
+  --ifm-background-color: var(--opam-paper);
+  --ifm-font-color-base: var(--opam-ink);
+  --ifm-heading-color: var(--opam-ink);
+
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, 'SFMono-Regular',
+    'Cascadia Code', Menlo, monospace;
+
+  --ifm-font-size-base: 17px;
+  --ifm-line-height-base: 1.7;
+  --ifm-code-font-size: 88%;
+  --ifm-heading-font-weight: 650;
+  --ifm-h1-font-size: 2.45rem;
+  --ifm-h2-font-size: 1.75rem;
+  --ifm-h3-font-size: 1.3rem;
+  --ifm-h4-font-size: 1.08rem;
+
+  /* A wider column than the Infima default; technical prose with code
+     samples reads badly when the code has to wrap. */
+  --ifm-container-width-xl: 1440px;
+  --doc-sidebar-width: 310px !important;
+
+  --ifm-toc-border-color: var(--opam-rule);
+  --ifm-hr-border-color: var(--opam-rule);
+  --ifm-blockquote-color: var(--opam-ink-soft);
+  --ifm-blockquote-border-color: var(--ifm-color-primary-lightest);
+
+  --ifm-code-background: #f1eee9;
+  --ifm-code-border-radius: 4px;
+  --ifm-pre-border-radius: 8px;
+  --docusaurus-highlighted-code-line-bg: rgba(31, 92, 139, 0.12);
+
+  --ifm-navbar-height: 3.75rem;
+  --ifm-navbar-background-color: rgba(251, 250, 248, 0.85);
+  --ifm-navbar-shadow: none;
+
+  --opam-shadow-card: 0 1px 2px rgba(20, 26, 31, 0.05);
+  --opam-shadow-card-hover: 0 6px 20px rgba(20, 26, 31, 0.09);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --ifm-color-primary: #6fb3e0;
+  --ifm-color-primary-dark: #57a6da;
+  --ifm-color-primary-darker: #4b9fd7;
+  --ifm-color-primary-darkest: #2b86c4;
+  --ifm-color-primary-light: #87c0e6;
+  --ifm-color-primary-lighter: #93c7e9;
+  --ifm-color-primary-lightest: #b8dbf1;
+
+  --opam-ink: #e8ecef;
+  --opam-ink-soft: #a3b0bb;
+  --opam-paper: #0f1418;
+  --opam-surface: #161d23;
+  --opam-rule: #26313a;
+  --opam-rule-strong: #35434f;
+
+  --ifm-background-color: var(--opam-paper);
+  --ifm-background-surface-color: var(--opam-surface);
+  --ifm-font-color-base: var(--opam-ink);
+  --ifm-heading-color: #f4f7f9;
+
+  --ifm-code-background: #1c252d;
+  --docusaurus-highlighted-code-line-bg: rgba(111, 179, 224, 0.16);
+
+  --ifm-navbar-background-color: rgba(15, 20, 24, 0.85);
+
+  --opam-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --opam-shadow-card-hover: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* ------------------------------------------------------------ typography - */
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+/* Long Ukrainian headings break badly on narrow screens without this. */
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.markdown h2 {
+  margin-top: 2.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--opam-rule);
+}
+
+.markdown h3 {
+  margin-top: 2rem;
+}
+
+/* Cap measure for readability; code blocks and tables opt out below. */
+.markdown > p,
+.markdown > ul,
+.markdown > ol {
+  max-width: 72ch;
+}
+
+.markdown a {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+.markdown strong {
+  font-weight: 650;
+  color: var(--opam-ink);
+}
+
+/* ----------------------------------------------------------------- code - */
+
+.markdown code {
+  border: 1px solid var(--opam-rule);
+  padding: 0.12em 0.36em;
+}
+
+.markdown a code {
+  color: inherit;
+}
+
+div[class^='codeBlockContainer'] {
+  box-shadow: var(--opam-shadow-card);
+  border: 1px solid var(--opam-rule);
+}
+
+div[class^='codeBlockTitle'] {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid var(--opam-rule);
+}
+
+/* ---------------------------------------------------------- admonitions - */
+
+/* The site has ~500 of these, so they carry a lot of the visual weight.
+   Flat tinted panels with a single accent edge, instead of Infima's heavy
+   full-border treatment. */
+.theme-admonition {
+  border: 1px solid var(--opam-rule);
+  border-left: 3px solid var(--ifm-alert-border-color);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.theme-admonition .admonitionHeading_node_modules-\@docusaurus-theme-classic-lib-theme-Admonition-Layout-styles-module,
+.theme-admonition div[class^='admonitionHeading'] {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.theme-admonition p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------- tables - */
+
+.markdown table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+
+.markdown table thead tr {
+  border-bottom: 2px solid var(--opam-rule-strong);
+}
+
+.markdown table th {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 650;
+  text-align: left;
+}
+
+.markdown table tr {
+  border-top: 1px solid var(--opam-rule);
+  background-color: transparent;
+}
+
+/* Wide technical tables should scroll rather than blow out the layout. */
+.markdown > table,
+.markdown .table-wrapper {
+  display: block;
+  overflow-x: auto;
+}
+
+/* --------------------------------------------------------------- navbar - */
+
+.navbar {
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--opam-rule);
+}
+
+.navbar__title {
+  font-family: var(--ifm-heading-font-family);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.navbar__link {
+  font-weight: 500;
+}
+
+/* -------------------------------------------------------------- sidebar - */
+
+.menu {
+  padding: 0.75rem !important;
+  font-size: 0.9rem;
+}
+
+.menu__link {
+  border-radius: 6px;
+  line-height: 1.4;
+  padding-block: 0.44rem;
+}
+
+.menu__list-item-collapsible:hover,
+.menu__link:hover {
+  background-color: var(--ifm-menu-color-background-hover);
+}
+
+.menu__link--active {
+  font-weight: 600;
+}
+
+/* Category labels are long ("Тема 14. Платформа .NET...") — let them wrap
+   instead of truncating, and give nested items a guide rule. */
+.menu__list .menu__list {
+  margin-left: 0.55rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--opam-rule);
+}
+
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ TOC - */
+
+.table-of-contents {
+  font-size: 0.83rem;
+  border-left: 1px solid var(--opam-rule);
+}
+
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+  font-weight: 550;
+}
+
+/* ------------------------------------------------- generated index cards - */
+
+/* The 39 category landing pages are generated-index pages. Number them —
+   the topics genuinely are a sequence — and make the cards quiet. */
+article .card {
+  border: 1px solid var(--opam-rule);
+  border-radius: 8px;
+  box-shadow: var(--opam-shadow-card);
+  background-color: var(--opam-surface);
+  transition: box-shadow 150ms ease, border-color 150ms ease,
+    transform 150ms ease;
+}
+
+article .card:hover {
+  border-color: var(--ifm-color-primary-lightest);
+  box-shadow: var(--opam-shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+article .card h2 {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+/* --------------------------------------------------------- pagination - */
+
+.pagination-nav__link {
+  border: 1px solid var(--opam-rule);
+  border-radius: 8px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary-lightest);
+  box-shadow: var(--opam-shadow-card);
+}
+
+.pagination-nav__sublabel {
+  color: var(--opam-ink-soft);
+}
+
+/* ----------------------------------------------------------------- misc - */
+
+.footer--dark {
+  --ifm-footer-background-color: #0d1216;
+  border-top: 1px solid var(--opam-rule);
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  background: transparent;
+  color: var(--opam-ink-soft);
+}
+
+kbd {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8em;
+  border-radius: 4px;
+}
+
+/* KaTeX blocks can overflow on phones. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.4rem;
+}
+
+/* Visible keyboard focus everywhere. */
+a:focus-visible,
+button:focus-visible,
+.menu__link:focus-visible,
+.card:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 996px) {
+  :root {
+    --ifm-font-size-base: 16px;
+    --ifm-h1-font-size: 1.95rem;
+    --ifm-h2-font-size: 1.5rem;
+  }
 }
