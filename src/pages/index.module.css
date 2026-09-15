@@ -1,23 +1,200 @@
-/**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
- */
+/* Homepage. The hero leads with the thing that actually characterises the
+   course: the two-semester arc from first algorithm to shipped WPF app. */
 
-.heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+.hero {
   position: relative;
+  padding: 5.5rem 0 4rem;
+  background-color: var(--opam-paper);
+  border-bottom: 1px solid var(--opam-rule);
   overflow: hidden;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+/* Faint drafting grid — the "engineering notebook" cue, kept very quiet. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+      to right,
+      var(--opam-rule) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, var(--opam-rule) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.4;
+  mask-image: radial-gradient(ellipse 80% 60% at 70% 0%, #000 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(
+    ellipse 80% 60% at 70% 0%,
+    #000 0%,
+    transparent 75%
+  );
+  pointer-events: none;
 }
 
-.buttons {
+.heroInner {
+  position: relative;
+  max-width: 44rem;
+}
+
+.heroMeta {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+  color: var(--opam-ink-soft);
+  margin-bottom: 1.1rem;
+}
+
+.heroTitle {
+  font-size: clamp(2.2rem, 5.2vw, 3.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+  font-size: clamp(1.02rem, 2vw, 1.2rem);
+  line-height: 1.6;
+  color: var(--opam-ink-soft);
+  max-width: 38rem;
+  margin-bottom: 2rem;
+}
+
+.heroActions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   align-items: center;
-  justify-content: center;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  font-weight: 560;
+  font-size: 0.97rem;
+  padding: 0.66rem 1.25rem;
+  transition: background-color 150ms ease, border-color 150ms ease,
+    color 150ms ease;
+}
+
+.primaryAction {
+  background-color: var(--ifm-color-primary);
+  color: #fff;
+  border: 1px solid var(--ifm-color-primary);
+}
+
+.primaryAction:hover {
+  background-color: var(--ifm-color-primary-darker);
+  border-color: var(--ifm-color-primary-darker);
+  color: #fff;
+  text-decoration: none;
+}
+
+[data-theme='dark'] .primaryAction {
+  color: var(--opam-paper);
+}
+
+.secondaryAction {
+  border: 1px solid var(--opam-rule-strong);
+  color: var(--opam-ink);
+  background-color: transparent;
+}
+
+.secondaryAction:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------- semesters - */
+
+.semesters {
+  padding: 3.75rem 0 4.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.4rem;
+}
+
+.sectionLead {
+  color: var(--opam-ink-soft);
+  max-width: 44rem;
+  margin-bottom: 2.25rem;
+}
+
+.termGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 1.1rem;
+}
+
+.term {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  background-color: var(--opam-surface);
+  border: 1px solid var(--opam-rule);
+  border-radius: 10px;
+  box-shadow: var(--opam-shadow-card);
+  transition: border-color 150ms ease, box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.term:hover {
+  border-color: var(--ifm-color-primary-lightest);
+  box-shadow: var(--opam-shadow-card-hover);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+/* The topic range is real data, so it gets to be the structural marker. */
+.termRange {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.7rem;
+}
+
+.termTitle {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1.12rem;
+  font-weight: 650;
+  color: var(--opam-ink);
+  line-height: 1.3;
+  margin-bottom: 0.5rem;
+}
+
+.termBody {
+  color: var(--opam-ink-soft);
+  font-size: 0.93rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.termTopics {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  font-size: 0.78rem;
+  color: var(--opam-ink-soft);
+  border: 1px solid var(--opam-rule);
+  border-radius: 5px;
+  padding: 0.14rem 0.46rem;
+  background-color: var(--ifm-background-color);
+}
+
+@media (max-width: 996px) {
+  .hero {
+    padding: 3.5rem 0 3rem;
+  }
+
+  .semesters {
+    padding: 2.75rem 0 3.5rem;
+  }
 }

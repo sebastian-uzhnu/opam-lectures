@@ -1,0 +1,32 @@
+{
+  "theme.SearchBar.label": {
+    "message": "Пошук"
+  },
+  "theme.SearchBar.seeAll": {
+    "message": "Показати всі результати"
+  },
+  "theme.SearchBar.noResultsText": {
+    "message": "Нічого не знайдено"
+  },
+  "theme.SearchBar.searchInContext": {
+    "message": "Показати всі результати в «{context}»"
+  },
+  "theme.SearchBar.seeAllOutsideContext": {
+    "message": "Показати всі результати поза «{context}»"
+  },
+  "theme.SearchPage.existingResultsTitle": {
+    "message": "Результати пошуку за запитом «{query}»"
+  },
+  "theme.SearchPage.emptyResultsTitle": {
+    "message": "Пошук по лекціях"
+  },
+  "theme.SearchPage.documentsFound.plurals": {
+    "message": "Знайдено 1 сторінку|Знайдено {count} сторінки|Знайдено {count} сторінок"
+  },
+  "theme.SearchPage.noResultsText": {
+    "message": "Нічого не знайдено"
+  },
+  "theme.SearchPage.searchContext.everywhere": {
+    "message": "Скрізь"
+  }
+}
