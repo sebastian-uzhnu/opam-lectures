@@ -132,7 +132,7 @@ doc.Root
 doc.Save("students.xml");
 ```
 
-:::tip Remove() на IEnumerable
+:::tip[Remove() на IEnumerable]
 Метод `.Remove()` — розширення LINQ to XML, що безпечно видаляє колекцію елементів. Не викидає `InvalidOperationException` при модифікації колекції під час перебору, бо спочатку матеріалізує список.
 :::
 

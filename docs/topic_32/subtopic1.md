@@ -61,7 +61,7 @@ Console.WriteLine("QueueUserWorkItem не блокує — головний по
 Thread.Sleep(3000); // Чекаємо завершення для демонстрації
 ```
 
-:::info Усі потоки ThreadPool є фоновими
+:::info[Усі потоки ThreadPool є фоновими]
 Потоки з ThreadPool завжди мають `IsBackground = true`. Це означає, що вони не утримують процес від завершення.
 :::
 
@@ -78,7 +78,7 @@ Console.WriteLine($"Макс. потоків: {maxWorker} (worker), {maxIo} (I/O
 ThreadPool.SetMinThreads(8, 8);
 ```
 
-:::warning Коли не варто використовувати ThreadPool напряму
+:::warning[Коли не варто використовувати ThreadPool напряму]
 - Якщо потрібен результат операції
 - Якщо потрібно чекати завершення кількох операцій
 - Якщо потрібен ланцюжок операцій ("спочатку A, потім B")
@@ -126,7 +126,7 @@ Task longRunning = Task.Factory.StartNew(() =>
 // LongRunning — натяк планувальнику створити окремий потік, а не брати з пулу
 ```
 
-:::tip Task.Run vs Task.Factory.StartNew
+:::tip[Task.Run vs Task.Factory.StartNew]
 Для більшості завдань використовуйте `Task.Run` — це спрощена версія `Task.Factory.StartNew` з розумними налаштуваннями за замовчуванням. `Task.Factory.StartNew` потрібен лише коли потрібні специфічні `TaskCreationOptions`, зокрема `LongRunning`.
 :::
 
@@ -157,7 +157,7 @@ Console.WriteLine($"Результат: {result}");
 int result2 = sumTask.GetAwaiter().GetResult();
 ```
 
-:::warning Небезпека .Result та .Wait()
+:::warning[Небезпека .Result та .Wait()]
 У WPF та ASP.NET застосуванні виклик `.Result` або `.Wait()` може призвести до **дедлоку** (взаємного блокування). Детально — у наступному розділі про async/await.
 :::
 

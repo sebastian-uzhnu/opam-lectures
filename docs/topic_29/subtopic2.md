@@ -67,7 +67,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 ```
 
-:::info Newtonsoft.Json (Json.NET)
+:::info[Newtonsoft.Json (Json.NET)]
 Існує також популярна стороння бібліотека `Newtonsoft.Json` (NuGet: `Newtonsoft.Json`). Вона старша, з більшою кількістю можливостей, але `System.Text.Json` у більшості випадків швидший і достатній. У цій лекції розглядаємо `System.Text.Json`.
 :::
 
@@ -269,7 +269,7 @@ if (root.TryGetProperty("address", out JsonElement addrEl))
 }
 ```
 
-:::warning using для JsonDocument
+:::warning[using для JsonDocument]
 `JsonDocument` реалізує `IDisposable`. Завжди використовуйте `using`, щоб звільнити пам'ять після роботи.
 :::
 

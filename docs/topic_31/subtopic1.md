@@ -40,7 +40,7 @@ dotnet ef database update InitialCreate
 dotnet ef migrations remove
 ```
 
-:::tip Якщо dotnet ef не знайдено
+:::tip[Якщо dotnet ef не знайдено]
 ```bash
 dotnet tool install --global dotnet-ef
 ```

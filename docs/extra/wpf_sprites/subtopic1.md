@@ -147,7 +147,7 @@ public class SpriteAnimator
 </Canvas>
 ```
 
-:::tip NearestNeighbor
+:::tip[NearestNeighbor]
 `RenderOptions.BitmapScalingMode="NearestNeighbor"` вимикає розмиття при масштабуванні піксельних (pixel art) зображень. Без нього WPF застосовує білінійну фільтрацію і кадри виглядають нечітко.
 :::
 

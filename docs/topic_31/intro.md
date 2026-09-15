@@ -186,7 +186,7 @@ foreach (var student in all)
     Console.WriteLine($"{student.Id}: {student.Name} — {student.Grade}");
 ```
 
-:::info EnsureCreated vs Migrate
+:::info[EnsureCreated vs Migrate]
 - `EnsureCreated()` — швидко, без міграцій. Таблиці створюються один раз. **Не підтримує** оновлення схеми після змін у моделях.
 - `Migrate()` — використовує систему міграцій. Підтримує поступове оновлення БД. Рекомендовано для реальних проектів.
 

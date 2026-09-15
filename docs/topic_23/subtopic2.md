@@ -92,7 +92,7 @@ sidebar_position: 3
 | `IsEnabled="False"` | пункт видно, але він сірий і не натискається |
 | вкладений `MenuItem` | підменю, що розкривається вбік |
 
-:::warning Обережно
+:::warning[Обережно]
 `InputGestureText` — це просто напис. Написати `InputGestureText="Ctrl+S"`
 і думати, що Ctrl+S тепер працює, — класична пастка. Щоб клавіша справді
 спрацьовувала, потрібні команди або `InputBindings` (нижче в цьому
@@ -150,7 +150,7 @@ private void Wrap_Click(object sender, RoutedEventArgs e)
 </TextBox>
 ```
 
-:::info Цікаво
+:::info[Цікаво]
 У `TextBox` контекстне меню вже є за замовчуванням — WPF додає його сам.
 Свій `ContextMenu` повністю замінює стандартний. А `Command="ApplicationCommands.Cut"`
 працює без жодного рядка C#: текстові елементи керування вміють обробляти
@@ -200,7 +200,7 @@ private void Wrap_Click(object sender, RoutedEventArgs e)
    (можна перетягнути)
 ```
 
-:::tip Порада
+:::tip[Порада]
 Кожній кнопці на панелі інструментів обов'язково задавайте `ToolTip`.
 На кнопці лише значок, і без підказки користувач не здогадається, що вона
 робить. У підказці корисно згадати й гарячу клавішу.
@@ -344,7 +344,7 @@ WPF уже містить десятки готових команд для зв
 (`BrowseBack`, `BrowseForward` — знадобляться у наступному підрозділі),
 `MediaCommands` (відтворення).
 
-:::info Цікаво
+:::info[Цікаво]
 Команди `Cut`, `Copy`, `Paste`, `Undo`, `SelectAll` у `TextBox` і `RichTextBox`
 працюють **самі**, без жодного `CommandBinding`: обробка вбудована в самі
 елементи керування. Тому контекстне меню з попереднього прикладу було
@@ -442,7 +442,7 @@ public partial class MainWindow : Window
 - щойно `isModified` стане `true` — обидва вмикаються самі;
 - напис «Ctrl+S» у меню з'являється автоматично.
 
-:::info Цікаво
+:::info[Цікаво]
 Хто ж викликає `CanExecute`? Клас `CommandManager`. Він переопитує всі
 команди на кожен рух миші, натискання клавіші та зміну фокуса. Якщо
 доступність команди змінилась «тихо» (наприклад, у таймері), і меню
@@ -450,7 +450,7 @@ public partial class MainWindow : Window
 `CommandManager.InvalidateRequerySuggested();`
 :::
 
-:::warning Обережно
+:::warning[Обережно]
 `MenuItem` без `Header`, але з `Command`, покаже текст самої команди —
 а він англійською («Save», «New»). Тому в українському інтерфейсі
 `Header` задавайте явно, як у прикладі вище.
@@ -563,7 +563,7 @@ private void WordCountCommand_Executed(object sender, ExecutedRoutedEventArgs e)
 | `KeyBinding` в `InputBindings` | у XAML вікна | клавіша своя для конкретного вікна |
 | `InputGestureText` | у XAML пункту меню | **нічого не робить**, лише напис |
 
-:::danger Часта помилка
+:::danger[Часта помилка]
 `InputBindings` працюють, поки фокус усередині цього вікна. Якщо ви
 поставили `KeyBinding` на кнопку чи панель, а фокус у той момент в іншому
 місці вікна — клавіша не спрацює. Для загальних дій ставте `InputBindings`

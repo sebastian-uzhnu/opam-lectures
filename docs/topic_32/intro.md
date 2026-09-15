@@ -115,7 +115,7 @@ var thread = new Thread(DownloadFile);
 thread.Start("https://example.com/file.zip");
 ```
 
-:::tip Передача кількох параметрів
+:::tip[Передача кількох параметрів]
 `ParameterizedThreadStart` приймає лише один `object`. Щоб передати кілька значень — використайте клас або анонімний тип, або просто захопіть змінні через лямбду:
 
 ```csharp
@@ -196,7 +196,7 @@ background.Start();
 Console.WriteLine("Main завершено");
 ```
 
-:::warning Типова помилка
+:::warning[Типова помилка]
 Якщо забути встановити `IsBackground = true` для допоміжного потоку — програма може не закритись після закриття вікна, бо потік досі живий у фоні.
 :::
 
@@ -264,7 +264,7 @@ thread.Join();
 Console.WriteLine("Готово");
 ```
 
-:::info Коли спрацьовує ThreadInterruptedException
+:::info[Коли спрацьовує ThreadInterruptedException]
 `ThreadInterruptedException` кидається лише коли потік знаходиться у стані очікування (`Thread.Sleep`, `Monitor.Wait`, `Thread.Join` тощо). Якщо потік зайнятий обчисленнями, виняток буде відкладено до наступного очікування.
 :::
 
@@ -452,7 +452,7 @@ namespace ThreadingDemo
 }
 ```
 
-:::tip Dispatcher.Invoke vs Dispatcher.BeginInvoke
+:::tip[Dispatcher.Invoke vs Dispatcher.BeginInvoke]
 - `Dispatcher.Invoke(...)` — **синхронний**: фоновий потік чекає, поки UI виконає делегат
 - `Dispatcher.BeginInvoke(...)` — **асинхронний**: фоновий потік продовжує одразу, не чекаючи виконання делегата
 
