@@ -19,3 +19,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .idea
+
+# Local scratch output, not part of the site
+/Claude outputs
