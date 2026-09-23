@@ -50,6 +50,10 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           remarkPlugins: [remarkMath],
           rehypePlugins: [rehypeKatex],
+          // Лабораторні та практичні роботи лишаються в репозиторії, але не
+          // потрапляють на сайт: їх немає ні в меню, ні в пошуку, ні за прямим
+          // посиланням. Щоб повернути — прибрати відповідний рядок.
+          exclude: ['labs/**', 'practicals/**'],
         },
         blog: false,
         theme: {
