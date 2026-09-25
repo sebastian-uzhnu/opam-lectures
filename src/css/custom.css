@@ -235,6 +235,26 @@ div[class^='codeBlockTitle'] {
   border-bottom: 1px solid var(--opam-rule);
 }
 
+/*
+ * На вузьких екранах бічне меню (.navbar-sidebar) є нащадком .navbar і має
+ * position: fixed. Властивість backdrop-filter створює для таких нащадків
+ * новий контейнерний блок, тому меню отримувало висоту навбару (близько 60px)
+ * замість повної висоти екрана — відкривалося, але лишалося невидимим.
+ * Тому на мобільних розмиття вимикаємо: там навбар і так непрозорий.
+ */
+@media (max-width: 996px) {
+  .navbar {
+    backdrop-filter: none;
+    /* Без розмиття напівпрозорий навбар просвічував би текст під час прокрутки. */
+    background-color: var(--opam-paper);
+  }
+
+  /* Саме меню успадковує колір навбару, тому теж має бути непрозорим. */
+  .navbar-sidebar {
+    background-color: var(--opam-paper);
+  }
+}
+
 .navbar__title {
   font-family: var(--ifm-heading-font-family);
   font-weight: 700;
